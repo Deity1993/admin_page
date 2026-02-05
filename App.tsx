@@ -118,7 +118,7 @@ const AppContent: React.FC = () => {
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute top-12 right-0 z-50">
+              <div className="fixed top-20 right-8 z-[9999]">
                 <Notifications onClose={() => setShowNotifications(false)} />
               </div>
             )}
