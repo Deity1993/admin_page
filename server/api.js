@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
-import { spawn } from 'node-pty';
+import { spawn as spawnProcess } from 'child_process';
 import http from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -287,35 +287,56 @@ const wss = new WebSocketServer({ server, path: '/ws/terminal' });
 wss.on('connection', (ws) => {
   console.log('🔌 New terminal WebSocket connection');
   
-  let ptyProcess = null;
+  let bashProcess = null;
+  let currentRows = 24;
+  let currentCols = 80;
 
   try {
-    // Spawn a bash shell
-    ptyProcess = spawn('bash', [], {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 24,
-      cwd: process.env.HOME || '/root',
-      env: process.env
+    // Spawn a bash shell using regular child_process
+    bashProcess = spawnProcess('bash', ['-i'], {
+      env: { ...process.env, TERM: 'xterm-256color' },
+      cwd: process.env.HOME || '/root'
     });
 
     // Send shell output to client
-    ptyProcess.onData((data) => {
+    bashProcess.stdout.on('data', (data) => {
       try {
-        ws.send(JSON.stringify({ type: 'output', data }));
+        ws.send(JSON.stringify({ type: 'output', data: data.toString('utf-8') }));
       } catch (err) {
-        console.error('Error sending data:', err);
+        console.error('Error sending stdout:', err);
+      }
+    });
+
+    bashProcess.stderr.on('data', (data) => {
+      try {
+        ws.send(JSON.stringify({ type: 'output', data: data.toString('utf-8') }));
+      } catch (err) {
+        console.error('Error sending stderr:', err);
       }
     });
 
     // Handle shell exit
-    ptyProcess.onExit(({ exitCode }) => {
+    bashProcess.on('exit', (exitCode) => {
       console.log(`Terminal process exited with code: ${exitCode}`);
       try {
+        ws.send(JSON.stringify({ 
+          type: 'output', 
+          data: `\r\n\x1b[1;33mSession ended (exit code: ${exitCode})\x1b[0m\r\n` 
+        }));
         ws.close();
       } catch (err) {
         // Already closed
       }
+    });
+
+    bashProcess.on('error', (err) => {
+      console.error('Bash process error:', err);
+      try {
+        ws.send(JSON.stringify({ 
+          type: 'output', 
+          data: `\r\n\x1b[1;31mError: ${err.message}\x1b[0m\r\n` 
+        }));
+      } catch {}
     });
 
     // Handle messages from client
@@ -324,9 +345,12 @@ wss.on('connection', (ws) => {
         const data = JSON.parse(msg.toString());
         
         if (data.type === 'input') {
-          ptyProcess.write(data.data);
+          bashProcess.stdin.write(data.data);
         } else if (data.type === 'resize') {
-          ptyProcess.resize(data.cols || 80, data.rows || 24);
+          currentRows = data.rows || 24;
+          currentCols = data.cols || 80;
+          // Note: Without node-pty, we can't actually resize the PTY
+          // This is just stored for reference
         }
       } catch (err) {
         console.error('Error handling message:', err);
@@ -335,15 +359,15 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
       console.log('🔌 Terminal WebSocket connection closed');
-      if (ptyProcess) {
-        ptyProcess.kill();
+      if (bashProcess && !bashProcess.killed) {
+        bashProcess.kill('SIGTERM');
       }
     });
 
     ws.on('error', (err) => {
       console.error('WebSocket error:', err);
-      if (ptyProcess) {
-        ptyProcess.kill();
+      if (bashProcess && !bashProcess.killed) {
+        bashProcess.kill('SIGTERM');
       }
     });
 
