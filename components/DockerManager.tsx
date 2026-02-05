@@ -35,6 +35,10 @@ const DockerManager: React.FC = () => {
     const urlMappings: Record<string, string> = {
       'zubenkoai': 'https://zubenkoai.zubenko.de',
       'zubenko-ai': 'https://zubenkoai.zubenko.de',
+      'n8n-compose-traefik-1': 'https://zubenko.de',
+      'traefik': 'https://zubenko.de',
+      'n8n-compose-n8n-1': 'https://n8n.zubenko.de',
+      'n8n': 'https://n8n.zubenko.de',
     };
 
     // Check if container has a custom URL mapping
@@ -54,6 +58,10 @@ const DockerManager: React.FC = () => {
     const urlMappings: Record<string, string> = {
       'zubenkoai': 'zubenkoai.zubenko.de',
       'zubenko-ai': 'zubenkoai.zubenko.de',
+      'n8n-compose-traefik-1': 'zubenko.de',
+      'traefik': 'zubenko.de',
+      'n8n-compose-n8n-1': 'n8n.zubenko.de',
+      'n8n': 'n8n.zubenko.de',
     };
 
     if (urlMappings[name]) {
