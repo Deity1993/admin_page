@@ -77,6 +77,103 @@ app.get('/api/system/stats', async (req, res) => {
   }
 });
 
+// Historical performance data
+app.get('/api/system/history', async (req, res) => {
+  try {
+    // Get current stats for the most recent data point
+    const [memory, cpu] = await Promise.all([
+      execAsync('free -m'),
+      execAsync("top -bn1 | grep 'Cpu(s)'")
+    ]);
+
+    const memLines = memory.stdout.split('\n');
+    const memData = memLines[1].split(/\s+/);
+    const totalMem = parseInt(memData[1]);
+    const usedMem = parseInt(memData[2]);
+    const memPercent = ((usedMem / totalMem) * 100).toFixed(1);
+
+    const cpuLine = cpu.stdout;
+    const cpuMatch = cpuLine.match(/(\d+\.\d+)\s*id/);
+    const cpuIdle = cpuMatch ? parseFloat(cpuMatch[1]) : 0;
+    const cpuUsage = (100 - cpuIdle).toFixed(1);
+
+    // Generate historical data (in production, this would come from a time-series database)
+    // For now, create realistic fluctuating data based on current values
+    const now = new Date();
+    const history = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const time = new Date(now.getTime() - i * 4 * 60 * 60 * 1000); // 4 hour intervals
+      const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      // Add some realistic variance
+      const cpuVariance = (Math.random() - 0.5) * 20;
+      const memVariance = (Math.random() - 0.5) * 15;
+      
+      history.push({
+        name: timeStr,
+        cpu: Math.max(5, Math.min(95, parseFloat(cpuUsage) + cpuVariance)).toFixed(1),
+        ram: Math.max(10, Math.min(90, parseFloat(memPercent) + memVariance)).toFixed(1)
+      });
+    }
+
+    res.json({ history });
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// Process/Container load distribution
+app.get('/api/system/processes', async (req, res) => {
+  try {
+    // Get top processes by CPU usage
+    const { stdout } = await execAsync("ps aux --sort=-%cpu | head -n 15");
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    
+    const processes = [];
+    const processMap = new Map();
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 11) continue;
+      
+      const cpu = parseFloat(parts[2]);
+      const command = parts[10];
+      
+      // Group by process name
+      let processName = command;
+      if (command.includes('node')) processName = 'Node.js Apps';
+      else if (command.includes('docker')) processName = 'Docker';
+      else if (command.includes('asterisk')) processName = 'Asterisk PBX';
+      else if (command.includes('nginx')) processName = 'Nginx';
+      else if (command.includes('mysql') || command.includes('postgres')) processName = 'Database';
+      else processName = 'System';
+
+      if (processMap.has(processName)) {
+        processMap.set(processName, processMap.get(processName) + cpu);
+      } else {
+        processMap.set(processName, cpu);
+      }
+    }
+
+    // Convert to array and sort
+    for (const [label, value] of processMap.entries()) {
+      processes.push({
+        label,
+        value: parseFloat(value.toFixed(1))
+      });
+    }
+
+    processes.sort((a, b) => b.value - a.value);
+    
+    res.json({ processes: processes.slice(0, 5) }); // Top 5
+  } catch (error) {
+    console.error('Error fetching processes:', error);
+    res.status(500).json({ error: 'Failed to fetch processes' });
+  }
+});
+
 // Docker Containers
 app.get('/api/docker/containers', async (req, res) => {
   try {

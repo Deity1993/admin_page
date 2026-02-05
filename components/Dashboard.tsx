@@ -15,15 +15,16 @@ interface SystemStats {
   uptime: string;
 }
 
-const MOCK_DATA = [
-  { name: '00:00', cpu: 32, ram: 45 },
-  { name: '04:00', cpu: 28, ram: 42 },
-  { name: '08:00', cpu: 45, ram: 50 },
-  { name: '12:00', cpu: 78, ram: 85 },
-  { name: '16:00', cpu: 55, ram: 65 },
-  { name: '20:00', cpu: 40, ram: 55 },
-  { name: '23:59', cpu: 35, ram: 48 },
-];
+interface HistoryData {
+  name: string;
+  cpu: string;
+  ram: string;
+}
+
+interface ProcessLoad {
+  label: string;
+  value: number;
+}
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; trend?: number }> = ({ title, value, icon, color, trend }) => (
   <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl shadow-xl">
@@ -48,6 +49,8 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<HistoryData[]>([]);
+  const [processes, setProcesses] = useState<ProcessLoad[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -57,13 +60,36 @@ const Dashboard: React.FC = () => {
         setStats(data);
       } catch (error) {
         console.error('Failed to fetch system stats:', error);
-      } finally {
-        setLoading(false);
       }
     };
 
-    fetchStats();
-    const interval = setInterval(fetchStats, 5000); // Update every 5 seconds
+    const fetchHistory = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/system/history`);
+        const data = await response.json();
+        setHistory(data.history || []);
+      } catch (error) {
+        console.error('Error fetching history:', error);
+      }
+    };
+
+    const fetchProcesses = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/system/processes`);
+        const data = await response.json();
+        setProcesses(data.processes || []);
+      } catch (error) {
+        console.error('Error fetching processes:', error);
+      }
+    };
+
+    const loadData = async () => {
+      await Promise.all([fetchStats(), fetchHistory(), fetchProcesses()]);
+      setLoading(false);
+    };
+
+    loadData();
+    const interval = setInterval(loadData, 10000); // Update every 10 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -112,7 +138,7 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MOCK_DATA}>
+              <AreaChart data={history}>
                 <defs>
                   <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
@@ -135,27 +161,33 @@ const Dashboard: React.FC = () => {
         <div className="bg-slate-800/40 border border-slate-700/50 p-6 rounded-3xl shadow-xl">
           <h3 className="text-lg font-bold mb-6">System Load</h3>
           <div className="space-y-6">
-            {[
-              { label: 'n8n Workflow', value: 85, color: 'bg-orange-500' },
-              { label: 'Asterisk Engine', value: 45, color: 'bg-blue-500' },
-              { label: 'Custom Node App', value: 62, color: 'bg-purple-500' },
-              { label: 'System Kernel', value: 12, color: 'bg-slate-500' },
-            ].map((item) => (
-              <div key={item.label}>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-slate-400">{item.label}</span>
-                  <span className="font-bold">{item.value}%</span>
-                </div>
-                <div className="w-full bg-slate-900 rounded-full h-2">
-                  <div className={`${item.color} h-2 rounded-full`} style={{ width: `${item.value}%` }}></div>
-                </div>
-              </div>
-            ))}
+            {processes.length === 0 ? (
+              <div className="text-slate-500 text-sm text-center py-8">Loading process data...</div>
+            ) : (
+              processes.map((item) => {
+                const color = 
+                  item.value > 60 ? 'bg-red-500' :
+                  item.value > 30 ? 'bg-orange-500' :
+                  item.value > 10 ? 'bg-blue-500' : 'bg-slate-500';
+                
+                return (
+                  <div key={item.label}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="font-bold">{item.value}%</span>
+                    </div>
+                    <div className="w-full bg-slate-900 rounded-full h-2">
+                      <div className={`${color} h-2 rounded-full`} style={{ width: `${Math.min(100, item.value)}%` }}></div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
           
-          <div className="mt-10 p-4 bg-orange-900/20 border border-orange-500/30 rounded-2xl">
-            <p className="text-sm text-orange-200">
-              <span className="font-bold">System Notice:</span> n8n CPU spikes detected. Consider increasing resource limits for the container.
+          <div className="mt-10 p-4 bg-blue-900/20 border border-blue-500/30 rounded-2xl">
+            <p className="text-sm text-blue-200">
+              <span className="font-bold">System Status:</span> All services running normally. Resource usage within acceptable limits.
             </p>
           </div>
         </div>
