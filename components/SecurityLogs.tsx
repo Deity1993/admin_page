@@ -119,10 +119,6 @@ const SecurityLogs: React.FC = () => {
     });
   };
 
-  const filteredLogs = filter === 'all' 
-    ? logs 
-    : logs.filter(log => log.level === filter);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
