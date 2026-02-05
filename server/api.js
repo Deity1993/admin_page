@@ -619,6 +619,206 @@ app.post('/api/system/settings', async (req, res) => {
   }
 });
 
+// User Management Endpoints
+// Storage for users (in production: database)
+const usersFile = path.join(__dirname, 'users.json');
+
+const getUsers = () => {
+  try {
+    if (fs.existsSync(usersFile)) {
+      return JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading users file:', error);
+  }
+  
+  // Default admin user
+  return [
+    {
+      id: '1',
+      username: 'admin',
+      email: 'admin@zubenko.de',
+      role: 'admin',
+      status: 'active',
+      created: new Date().toISOString(),
+      lastLogin: new Date(Date.now() - 3600000).toISOString()
+    }
+  ];
+};
+
+const saveUsers = (users) => {
+  try {
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving users file:', error);
+    return false;
+  }
+};
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = getUsers();
+    // Don't send passwords to frontend
+    const safeUsers = users.map(({ password, ...user }) => user);
+    res.json({ users: safeUsers });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, email, password, role } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const users = getUsers();
+    
+    // Check if user already exists
+    if (users.some(u => u.username === username)) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    
+    const newUser = {
+      id: Date.now().toString(),
+      username,
+      email,
+      password: Buffer.from(password).toString('base64'), // Simple encoding, use bcrypt in production
+      role: role || 'user',
+      status: 'active',
+      created: new Date().toISOString(),
+      lastLogin: null
+    };
+    
+    users.push(newUser);
+    
+    if (saveUsers(users)) {
+      const { password, ...safeUser } = newUser;
+      res.status(201).json({ 
+        success: true, 
+        user: safeUser,
+        message: 'User created successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to create user' });
+    }
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, role, status } = req.body;
+    
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = users[userIndex];
+    
+    // Update fields
+    if (username && username !== user.username) {
+      if (users.some(u => u.username === username && u.id !== id)) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+      user.username = username;
+    }
+    
+    if (email) user.email = email;
+    if (role) user.role = role;
+    if (status) user.status = status;
+    
+    if (saveUsers(users)) {
+      const { password, ...safeUser } = user;
+      res.json({ 
+        success: true, 
+        user: safeUser,
+        message: 'User updated successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to update user' });
+    }
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+app.put('/api/users/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    
+    const users = getUsers();
+    const user = users.find(u => u.id === id);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.password = Buffer.from(password).toString('base64');
+    
+    if (saveUsers(users)) {
+      res.json({ 
+        success: true,
+        message: 'Password changed successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Prevent deleting the last admin
+    const user = users[userIndex];
+    if (user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1) {
+      return res.status(403).json({ error: 'Cannot delete the last admin user' });
+    }
+    
+    users.splice(userIndex, 1);
+    
+    if (saveUsers(users)) {
+      res.json({ 
+        success: true,
+        message: 'User deleted successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Admin API Server running on port ${PORT}`);
   console.log(`✅ WebSocket Terminal Server ready at ws://localhost:${PORT}/ws/terminal`);

@@ -7,6 +7,7 @@ import AsteriskManager from './components/AsteriskManager';
 import TerminalAccess from './components/TerminalAccess';
 import SecurityLogs from './components/SecurityLogs';
 import SystemSettings from './components/SystemSettings';
+import UserManagement from './components/UserManagement';
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
@@ -46,14 +47,7 @@ const AppContent: React.FC = () => {
       case 'terminal': return <TerminalAccess />;
       case 'security': return <SecurityLogs />;
       case 'settings': return <SystemSettings />;
-      case 'users': 
-        return (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-slate-800/20 border border-slate-700/50 rounded-3xl">
-            <User className="w-16 h-16 mb-4 opacity-20" />
-            <h3 className="text-xl font-bold text-white mb-2">User Management</h3>
-            <p>Module integration in progress. Check back soon.</p>
-          </div>
-        );
+      case 'users': return <UserManagement />;
       default: return <Dashboard />;
     }
   };
