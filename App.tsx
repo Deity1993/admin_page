@@ -4,7 +4,6 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
 import AsteriskManager from './components/AsteriskManager';
-import GeminiAssistant from './components/GeminiAssistant';
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
@@ -84,8 +83,6 @@ const AppContent: React.FC = () => {
         <section className="relative z-10 pb-24">
           {renderContent()}
         </section>
-
-        <GeminiAssistant />
       </main>
     </div>
   );
