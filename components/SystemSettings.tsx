@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Save, Server, Network, Database, Bell, Mail, Key, Globe, Clock } from 'lucide-react';
 
 interface SettingSection {
@@ -18,48 +18,84 @@ interface Setting {
 
 const SystemSettings: React.FC = () => {
   const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [systemInfo, setSystemInfo] = useState({
+    osVersion: '',
+    kernel: '',
+    nodeVersion: '',
+    uptime: ''
+  });
   const [settings, setSettings] = useState<Record<string, any>>({
-    // Server Settings
-    serverName: 'zubenko.de',
-    timezone: 'Europe/Berlin',
-    autoUpdate: true,
-    
-    // Network Settings
+    serverName: '',
+    timezone: '',
+    autoUpdate: false,
     sshPort: '22',
     maxConnections: '100',
     enableIPv6: false,
-    
-    // Notifications
-    emailNotifications: true,
+    emailNotifications: false,
     slackWebhook: '',
     alertThreshold: '80',
-    
-    // Security
     sessionTimeout: '8',
     requireStrongPassword: true,
     twoFactorAuth: false,
-    
-    // Backup
-    autoBackup: true,
+    autoBackup: false,
     backupInterval: 'daily',
     backupRetention: '30',
   });
+
+  useEffect(() => {
+    fetchSettings();
+    fetchSystemInfo();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/system/settings');
+      const data = await response.json();
+      setSettings(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchSystemInfo = async () => {
+    try {
+      const response = await fetch('/api/system/info');
+      const data = await response.json();
+      setSystemInfo(data);
+    } catch (error) {
+      console.error('Error fetching system info:', error);
+    }
+  };
 
   const handleChange = (id: string, value: any) => {
     setSettings(prev => ({ ...prev, [id]: value }));
     setHasChanges(true);
   };
 
-  const saveSettings = () => {
-    // In production: send to API
-    console.log('Saving settings:', settings);
-    setHasChanges(false);
-    alert('Settings saved successfully!');
+  const saveSettings = async () => {
+    try {
+      const response = await fetch('/api/system/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await response.json();
+      if (data.success) {
+        setHasChanges(false);
+        alert('Settings saved successfully!');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      alert('Failed to save settings');
+    }
   };
 
   const resetSettings = () => {
     if (confirm('Reset all settings to default?')) {
-      // Reset to defaults
+      fetchSettings();
       setHasChanges(false);
     }
   };
@@ -323,19 +359,19 @@ const SystemSettings: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-slate-500 uppercase">OS Version</p>
-            <p className="text-sm font-semibold text-white">Ubuntu 24.04.3 LTS</p>
+            <p className="text-sm font-semibold text-white">{systemInfo.osVersion || 'Loading...'}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase">Kernel</p>
-            <p className="text-sm font-semibold text-white">5.15.0-91-generic</p>
+            <p className="text-sm font-semibold text-white">{systemInfo.kernel || 'Loading...'}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase">Node.js</p>
-            <p className="text-sm font-semibold text-white">v20.20.0</p>
+            <p className="text-sm font-semibold text-white">{systemInfo.nodeVersion || 'Loading...'}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase">Uptime</p>
-            <p className="text-sm font-semibold text-white">1 day, 17 hours</p>
+            <p className="text-sm font-semibold text-white">{systemInfo.uptime || 'Loading...'}</p>
           </div>
         </div>
       </div>

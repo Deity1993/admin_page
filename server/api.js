@@ -361,6 +361,167 @@ wss.on('connection', (ws) => {
   }
 });
 
+// Security & Logs Endpoints
+app.get('/api/security/logs', async (req, res) => {
+  try {
+    const { level, limit = 100 } = req.query;
+    
+    // journalctl command to get system logs
+    let command = `journalctl -n ${limit} --no-pager -o json`;
+    
+    // Filter by priority level if specified
+    if (level) {
+      const priorityMap = {
+        'critical': '0..2',
+        'error': '3',
+        'warning': '4',
+        'info': '5..6'
+      };
+      if (priorityMap[level]) {
+        command += ` -p ${priorityMap[level]}`;
+      }
+    }
+
+    const { stdout } = await execAsync(command);
+    const logLines = stdout.trim().split('\n').filter(line => line);
+    
+    const logs = logLines.map(line => {
+      try {
+        const entry = JSON.parse(line);
+        return {
+          timestamp: new Date(parseInt(entry.__REALTIME_TIMESTAMP) / 1000).toISOString(),
+          level: getPriorityLevel(entry.PRIORITY),
+          service: entry.SYSLOG_IDENTIFIER || entry._SYSTEMD_UNIT || 'system',
+          message: entry.MESSAGE || '',
+          ip: entry._HOSTNAME || 'localhost'
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(log => log !== null);
+
+    res.json({ logs });
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+function getPriorityLevel(priority) {
+  const levels = {
+    '0': 'critical', '1': 'critical', '2': 'critical',
+    '3': 'error',
+    '4': 'warning',
+    '5': 'info', '6': 'info',
+    '7': 'info'
+  };
+  return levels[priority] || 'info';
+}
+
+app.get('/api/security/metrics', async (req, res) => {
+  try {
+    // Failed login attempts (last 24 hours)
+    const failedLogins = await execAsync(
+      "journalctl -u ssh --since '24 hours ago' | grep -i 'failed\\|failure' | wc -l"
+    ).catch(() => ({ stdout: '0' }));
+
+    // Active sessions
+    const sessions = await execAsync('who | wc -l').catch(() => ({ stdout: '0' }));
+
+    // Firewall blocks (if ufw is installed)
+    const firewallBlocks = await execAsync(
+      "journalctl -u ufw --since '24 hours ago' | grep -i 'block' | wc -l"
+    ).catch(() => ({ stdout: '0' }));
+
+    res.json({
+      failedLogins: parseInt(failedLogins.stdout.trim()) || 0,
+      activeSessions: parseInt(sessions.stdout.trim()) || 0,
+      firewallBlocks: parseInt(firewallBlocks.stdout.trim()) || 0,
+      securityAlerts: 0
+    });
+  } catch (error) {
+    console.error('Error fetching security metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch security metrics' });
+  }
+});
+
+// System Settings Endpoints
+app.get('/api/system/info', async (req, res) => {
+  try {
+    const [osRelease, kernel, uptime] = await Promise.all([
+      execAsync('lsb_release -ds').catch(() => ({ stdout: 'Unknown' })),
+      execAsync('uname -r').catch(() => ({ stdout: 'Unknown' })),
+      execAsync('uptime -p').catch(() => ({ stdout: 'Unknown' }))
+    ]);
+
+    // Get Node.js version
+    const nodeVersion = process.version;
+
+    res.json({
+      osVersion: osRelease.stdout.trim().replace(/"/g, ''),
+      kernel: kernel.stdout.trim(),
+      nodeVersion: nodeVersion,
+      uptime: uptime.stdout.trim().replace('up ', '')
+    });
+  } catch (error) {
+    console.error('Error fetching system info:', error);
+    res.status(500).json({ error: 'Failed to fetch system info' });
+  }
+});
+
+app.get('/api/system/settings', async (req, res) => {
+  try {
+    const [hostname, timezone] = await Promise.all([
+      execAsync('hostname').catch(() => ({ stdout: 'unknown' })),
+      execAsync('timedatectl show -p Timezone --value').catch(() => ({ stdout: 'UTC' }))
+    ]);
+
+    // Check SSH port
+    const sshConfig = await execAsync("grep '^Port' /etc/ssh/sshd_config").catch(() => ({ stdout: 'Port 22' }));
+    const sshPort = sshConfig.stdout.match(/\d+/)?.[0] || '22';
+
+    res.json({
+      serverName: hostname.stdout.trim(),
+      timezone: timezone.stdout.trim(),
+      sshPort: sshPort,
+      autoUpdate: false, // Would need to check apt config
+      enableIPv6: false,
+      maxConnections: '100',
+      emailNotifications: false,
+      slackWebhook: '',
+      alertThreshold: '80',
+      sessionTimeout: '8',
+      requireStrongPassword: true,
+      twoFactorAuth: false,
+      autoBackup: false,
+      backupInterval: 'daily',
+      backupRetention: '30'
+    });
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+app.post('/api/system/settings', async (req, res) => {
+  try {
+    const settings = req.body;
+    
+    // In production, this would update actual system settings
+    // For now, just acknowledge the save
+    console.log('Settings update request:', settings);
+    
+    res.json({ 
+      success: true, 
+      message: 'Settings saved successfully',
+      settings 
+    });
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Admin API Server running on port ${PORT}`);
   console.log(`✅ WebSocket Terminal Server ready at ws://localhost:${PORT}/ws/terminal`);

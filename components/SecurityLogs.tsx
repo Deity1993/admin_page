@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Activity, AlertTriangle, Lock, Eye, EyeOff, Download, RefreshCw, Filter } from 'lucide-react';
 
 interface LogEntry {
-  id: number;
   timestamp: string;
   level: 'info' | 'warning' | 'error' | 'critical';
   service: string;
@@ -13,7 +12,6 @@ interface LogEntry {
 interface SecurityMetric {
   label: string;
   value: number;
-  change: number;
   status: 'success' | 'warning' | 'danger';
 }
 
@@ -22,72 +20,73 @@ const SecurityLogs: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [metrics, setMetrics] = useState({
+    failedLogins: 0,
+    activeSessions: 0,
+    firewallBlocks: 0,
+    securityAlerts: 0
+  });
 
-  const metrics: SecurityMetric[] = [
-    { label: 'Failed Login Attempts', value: 3, change: -2, status: 'success' },
-    { label: 'Active Sessions', value: 1, change: 0, status: 'success' },
-    { label: 'Firewall Blocks', value: 47, change: +12, status: 'warning' },
-    { label: 'Security Alerts', value: 0, change: 0, status: 'success' },
-  ];
+  const fetchLogs = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filter !== 'all') params.append('level', filter);
+      params.append('limit', '100');
 
-  const mockLogs: LogEntry[] = [
-    {
-      id: 1,
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      service: 'admin-api',
-      message: 'API Server started successfully on port 3002',
-    },
-    {
-      id: 2,
-      timestamp: new Date(Date.now() - 120000).toISOString(),
-      level: 'info',
-      service: 'nginx',
-      message: 'Configuration reloaded successfully',
-    },
-    {
-      id: 3,
-      timestamp: new Date(Date.now() - 300000).toISOString(),
-      level: 'warning',
-      service: 'sshd',
-      message: 'Failed password for invalid user admin from 192.168.1.100',
-      ip: '192.168.1.100',
-    },
-    {
-      id: 4,
-      timestamp: new Date(Date.now() - 600000).toISOString(),
-      level: 'info',
-      service: 'docker',
-      message: 'Container zubenkoai started',
-    },
-    {
-      id: 5,
-      timestamp: new Date(Date.now() - 900000).toISOString(),
-      level: 'error',
-      service: 'systemd',
-      message: 'Service restart limit exceeded',
-    },
-  ];
+      const response = await fetch(`/api/security/logs?${params}`);
+      const data = await response.json();
+      setLogs(data.logs || []);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      const response = await fetch('/api/security/metrics');
+      const data = await response.json();
+      setMetrics(data);
+    } catch (error) {
+      console.error('Error fetching metrics:', error);
+    }
+  };
 
   useEffect(() => {
-    setLogs(mockLogs);
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchLogs(), fetchMetrics()]);
+      setLoading(false);
+    };
 
+    loadData();
+  }, [filter]);
+
+  useEffect(() => {
     if (autoRefresh) {
       const interval = setInterval(() => {
-        // In production, fetch real logs from API
-        setLogs(prev => [...mockLogs]);
+        fetchLogs();
+        fetchMetrics();
       }, 10000);
-
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
+  }, [autoRefresh, filter]);
+
+  const metricsDisplay: SecurityMetric[] = [
+    { label: 'Failed Login Attempts', value: metrics.failedLogins, status: metrics.failedLogins > 5 ? 'warning' : 'success' },
+    { label: 'Active Sessions', value: metrics.activeSessions, status: 'success' },
+    { label: 'Firewall Blocks', value: metrics.firewallBlocks, status: metrics.firewallBlocks > 100 ? 'danger' : 'warning' },
+    { label: 'Security Alerts', value: metrics.securityAlerts, status: metrics.securityAlerts > 0 ? 'danger' : 'success' },
+  ];
+
+  const filteredLogs = filter === 'all' 
+    ? logs 
+    : logs.filter(log => log.level === filter);
 
   const refreshLogs = () => {
     setLoading(true);
-    setTimeout(() => {
-      setLogs(mockLogs);
+    Promise.all([fetchLogs(), fetchMetrics()]).finally(() => {
       setLoading(false);
-    }, 500);
+    });
   };
 
   const getLevelColor = (level: string) => {
@@ -166,7 +165,7 @@ const SecurityLogs: React.FC = () => {
 
       {/* Security Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {metrics.map((metric, index) => (
+        {metricsDisplay.map((metric, index) => (
           <div key={index} className="bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">{metric.label}</span>
@@ -174,9 +173,6 @@ const SecurityLogs: React.FC = () => {
             </div>
             <div className="flex items-end justify-between">
               <div className="text-3xl font-bold">{metric.value}</div>
-              <div className={`text-xs font-semibold ${metric.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {metric.change > 0 ? '+' : ''}{metric.change} today
-              </div>
             </div>
           </div>
         ))}
