@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1",
+    "username": "admin",
+    "email": "admin@zubenko.de",
+    "password": "$2b$10$FKtIVUugLLrX39uUOE1t/.qDTvA/BBneJuIHGZt28vhXgH2qFxODa",
+    "role": "admin",
+    "status": "active",
+    "created": "2026-02-05T06:01:38.178Z",
+    "lastLogin": null
+  }
+]
