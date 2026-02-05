@@ -1,0 +1,31 @@
+[Unit]
+Description=Admin Page - Server Administration Panel
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/admin_page
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+EnvironmentFile=/var/www/admin_page/.env.production
+
+# Wenn Sie die App mit vite preview hosten möchten
+ExecStart=/usr/bin/node /var/www/admin_page/node_modules/.bin/vite preview --port 3000 --host 0.0.0.0
+
+# Automatischer Neustart bei Fehler
+Restart=always
+RestartSec=10
+
+# Sicherheitseinstellungen
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=admin-page
+
+[Install]
+WantedBy=multi-user.target

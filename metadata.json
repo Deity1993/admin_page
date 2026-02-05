@@ -1,0 +1,7 @@
+{
+  "name": "Admin_Page",
+  "description": "A high-performance dashboard for managing Ubuntu servers, Docker containers (n8n, custom apps), and Asterisk PBX with integrated Gemini AI for troubleshooting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
