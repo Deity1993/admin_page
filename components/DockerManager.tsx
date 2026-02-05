@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Play, Square, RotateCw, ExternalLink, MoreVertical, Search, Plus, Box } from 'lucide-react';
+import { Play, Square, RotateCw, ExternalLink, MoreVertical, Search, Plus, Box, Download, Archive, Trash2 } from 'lucide-react';
 import { ServiceStatus, ContainerInfo } from '../types';
 
 const API_BASE = window.location.origin;
@@ -14,10 +14,20 @@ interface DockerContainer {
   port: number | null;
 }
 
+interface BackupFile {
+  filename: string;
+  size: number;
+  created: string;
+  containerName: string;
+}
+
 const DockerManager: React.FC = () => {
   const [containers, setContainers] = useState<ContainerInfo[]>([]);
+  const [backups, setBackups] = useState<BackupFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [creatingBackup, setCreatingBackup] = useState<string | null>(null);
+  const [showBackups, setShowBackups] = useState(false);
 
   useEffect(() => {
     const fetchContainers = async () => {
@@ -42,8 +52,22 @@ const DockerManager: React.FC = () => {
       }
     };
 
+    const fetchBackups = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/docker/backups`);
+        const data = await response.json();
+        setBackups(data);
+      } catch (error) {
+        console.error('Failed to fetch backups:', error);
+      }
+    };
+
     fetchContainers();
-    const interval = setInterval(fetchContainers, 10000); // Update every 10 seconds
+    fetchBackups();
+    const interval = setInterval(() => {
+      fetchContainers();
+      fetchBackups();
+    }, 10000); // Update every 10 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -54,6 +78,59 @@ const DockerManager: React.FC = () => {
       ? { ...c, status: c.status === ServiceStatus.RUNNING ? ServiceStatus.STOPPED : ServiceStatus.RUNNING, uptime: c.status === ServiceStatus.RUNNING ? '0s' : 'Just now' } 
       : c
     ));
+  };
+
+  const createBackup = async (containerName: string) => {
+    setCreatingBackup(containerName);
+    try {
+      const response = await fetch(`${API_BASE}/api/docker/backup/${containerName}`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh backups list
+        const backupsResponse = await fetch(`${API_BASE}/api/docker/backups`);
+        const backupsData = await backupsResponse.json();
+        setBackups(backupsData);
+        alert(`Backup erstellt: ${data.filename}`);
+      }
+    } catch (error) {
+      console.error('Backup creation failed:', error);
+      alert('Backup Erstellung fehlgeschlagen');
+    } finally {
+      setCreatingBackup(null);
+    }
+  };
+
+  const downloadBackup = (filename: string) => {
+    window.open(`${API_BASE}/api/docker/backup/download/${filename}`, '_blank');
+  };
+
+  const deleteBackup = async (filename: string) => {
+    if (!confirm(`Backup "${filename}" wirklich löschen?`)) return;
+    
+    try {
+      await fetch(`${API_BASE}/api/docker/backup/${filename}`, {
+        method: 'DELETE'
+      });
+      
+      // Refresh backups list
+      const response = await fetch(`${API_BASE}/api/docker/backups`);
+      const data = await response.json();
+      setBackups(data);
+    } catch (error) {
+      console.error('Backup deletion failed:', error);
+      alert('Backup Löschen fehlgeschlagen');
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const filtered = containers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
@@ -77,12 +154,60 @@ const DockerManager: React.FC = () => {
               className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
             />
           </div>
+          <button 
+            onClick={() => setShowBackups(!showBackups)}
+            className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl transition text-sm font-bold"
+          >
+            <Archive className="w-4 h-4" />
+            <span>Backups ({backups.length})</span>
+          </button>
           <button className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded-xl transition shadow-lg shadow-orange-900/20 text-sm font-bold">
             <Plus className="w-4 h-4" />
             <span>Deploy New</span>
           </button>
         </div>
       </div>
+
+      {showBackups && (
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl overflow-hidden shadow-xl p-6">
+          <h3 className="text-lg font-bold mb-4 flex items-center">
+            <Archive className="w-5 h-5 mr-2 text-orange-400" />
+            Verfügbare Backups
+          </h3>
+          {backups.length === 0 ? (
+            <p className="text-slate-400 text-center py-8">Keine Backups vorhanden</p>
+          ) : (
+            <div className="space-y-2">
+              {backups.map((backup) => (
+                <div key={backup.filename} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl border border-slate-700 hover:border-slate-600 transition">
+                  <div>
+                    <p className="font-semibold text-white">{backup.containerName}</p>
+                    <p className="text-xs text-slate-400">
+                      {new Date(backup.created).toLocaleString('de-DE')} • {formatBytes(backup.size)}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => downloadBackup(backup.filename)}
+                      className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteBackup(backup.filename)}
+                      className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition"
+                      title="Löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl overflow-hidden shadow-xl">
         <table className="w-full text-left border-collapse">
@@ -133,6 +258,18 @@ const DockerManager: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end space-x-2">
+                    <button 
+                      onClick={() => createBackup(container.name)}
+                      disabled={creatingBackup === container.name}
+                      className={`p-2 rounded-lg transition-colors ${
+                        creatingBackup === container.name
+                        ? 'text-slate-600 cursor-not-allowed'
+                        : 'text-blue-400 hover:bg-blue-400/10'
+                      }`}
+                      title="Backup erstellen"
+                    >
+                      <Archive className={`w-4 h-4 ${creatingBackup === container.name ? 'animate-pulse' : ''}`} />
+                    </button>
                     <button 
                       onClick={() => toggleStatus(container.id)}
                       className={`p-2 rounded-lg transition-colors ${

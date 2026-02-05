@@ -2,10 +2,21 @@ import express from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3002;
+
+const BACKUP_DIR = path.join(__dirname, 'backups');
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
 
 app.use(cors());
 app.use(express.json());
@@ -156,6 +167,88 @@ app.get('/api/asterisk/extensions', async (req, res) => {
     res.json(extensions.length > 0 ? extensions : [
       { username: 'No extensions', status: 'Offline', ip: '-', lastUsed: 'N/A' }
     ]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Docker Backup - Create
+app.post('/api/docker/backup/:containerName', async (req, res) => {
+  try {
+    const { containerName } = req.params;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const backupFile = `${containerName}_${timestamp}.tar`;
+    const backupPath = path.join(BACKUP_DIR, backupFile);
+
+    // Export container to tar
+    await execAsync(`docker export ${containerName} -o "${backupPath}"`);
+
+    res.json({ 
+      success: true, 
+      filename: backupFile,
+      path: backupPath,
+      size: fs.statSync(backupPath).size
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Docker Backups - List
+app.get('/api/docker/backups', async (req, res) => {
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(file => file.endsWith('.tar'))
+      .map(file => {
+        const stats = fs.statSync(path.join(BACKUP_DIR, file));
+        return {
+          filename: file,
+          size: stats.size,
+          created: stats.birthtime,
+          containerName: file.split('_')[0]
+        };
+      })
+      .sort((a, b) => b.created - a.created);
+
+    res.json(files);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Docker Backup - Download
+app.get('/api/docker/backup/download/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(BACKUP_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Backup file not found' });
+    }
+
+    res.download(filePath, filename, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        res.status(500).json({ error: 'Download failed' });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Docker Backup - Delete
+app.delete('/api/docker/backup/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(BACKUP_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Backup file not found' });
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true, message: 'Backup deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
