@@ -5,12 +5,16 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer } from 'ws';
+import { spawn } from 'node-pty';
+import http from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const execAsync = promisify(exec);
 const app = express();
+const server = http.createServer(app);
 const PORT = 3002;
 
 const BACKUP_DIR = path.join(__dirname, 'backups');
@@ -277,6 +281,83 @@ app.delete('/api/docker/backup/:filename', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// WebSocket Server for Terminal
+const wss = new WebSocketServer({ server, path: '/ws/terminal' });
+
+wss.on('connection', (ws) => {
+  console.log('🔌 New terminal WebSocket connection');
+  
+  let ptyProcess = null;
+
+  try {
+    // Spawn a bash shell
+    ptyProcess = spawn('bash', [], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: process.env.HOME || '/root',
+      env: process.env
+    });
+
+    // Send shell output to client
+    ptyProcess.onData((data) => {
+      try {
+        ws.send(JSON.stringify({ type: 'output', data }));
+      } catch (err) {
+        console.error('Error sending data:', err);
+      }
+    });
+
+    // Handle shell exit
+    ptyProcess.onExit(({ exitCode }) => {
+      console.log(`Terminal process exited with code: ${exitCode}`);
+      try {
+        ws.close();
+      } catch (err) {
+        // Already closed
+      }
+    });
+
+    // Handle messages from client
+    ws.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg.toString());
+        
+        if (data.type === 'input') {
+          ptyProcess.write(data.data);
+        } else if (data.type === 'resize') {
+          ptyProcess.resize(data.cols || 80, data.rows || 24);
+        }
+      } catch (err) {
+        console.error('Error handling message:', err);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('🔌 Terminal WebSocket connection closed');
+      if (ptyProcess) {
+        ptyProcess.kill();
+      }
+    });
+
+    ws.on('error', (err) => {
+      console.error('WebSocket error:', err);
+      if (ptyProcess) {
+        ptyProcess.kill();
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating terminal:', error);
+    ws.send(JSON.stringify({ 
+      type: 'output', 
+      data: '\r\n\x1b[1;31mError: Could not create terminal session\x1b[0m\r\n' 
+    }));
+    ws.close();
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Admin API Server running on port ${PORT}`);
+  console.log(`✅ WebSocket Terminal Server ready at ws://localhost:${PORT}/ws/terminal`);
 });
