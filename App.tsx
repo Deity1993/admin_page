@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
@@ -14,6 +14,24 @@ import { Bell, User, LogOut } from 'lucide-react';
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { isAuthenticated, login, logout } = useAuth();
+  const [systemInfo, setSystemInfo] = useState({
+    osVersion: 'Loading...',
+    hostname: 'Loading...'
+  });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetch('/api/system/info')
+        .then(res => res.json())
+        .then(data => {
+          setSystemInfo({
+            osVersion: data.osVersion || 'Unknown',
+            hostname: 'zubenko.de'
+          });
+        })
+        .catch(err => console.error('Error fetching system info:', err));
+    }
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     logout();
@@ -57,7 +75,7 @@ const AppContent: React.FC = () => {
           <div>
             <h2 className="text-3xl font-extrabold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
             <p className="text-slate-400 text-sm mt-1 flex items-center">
-              Ubuntu 22.04 LTS • Host: <span className="font-mono ml-1 text-orange-400">serv-dev-01</span>
+              {systemInfo.osVersion} • Host: <span className="font-mono ml-1 text-orange-400">{systemInfo.hostname}</span>
             </p>
           </div>
 
