@@ -99,10 +99,10 @@ const AppContent: React.FC = () => {
         </div>
       )}
       
-      <main className="flex-1 ml-64 p-8 relative overflow-hidden">
-        {/* Background blobs for aesthetics */}
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[500px] h-[500px] bg-orange-500/10 blur-[100px] rounded-full"></div>
-        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[100px] rounded-full"></div>
+      <main className="flex-1 ml-64 p-8 relative">
+        {/* Background blobs for aesthetics - contained */}
+        <div className="fixed top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[500px] h-[500px] bg-orange-500/10 blur-[100px] rounded-full pointer-events-none z-0"></div>
+        <div className="fixed bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none z-0"></div>
 
         <header className="flex items-center justify-between mb-10 relative z-10">
           <div>
