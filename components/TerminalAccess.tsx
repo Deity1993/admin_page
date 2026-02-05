@@ -3,13 +3,16 @@ import { Terminal as TerminalIcon, Power, Trash2, Plus, Maximize2 } from 'lucide
 
 const TerminalAccess: React.FC = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [sessions, setSessions] = useState<{id: number, name: string, active: boolean}[]>([
     { id: 1, name: 'root@zubenko.de', active: true }
   ]);
   const [activeSession, setActiveSession] = useState(1);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const termRef = useRef<any>(null);
+  const fitAddonRef = useRef<any>(null);
 
   useEffect(() => {
     // Dynamically load xterm.js
@@ -57,6 +60,7 @@ const TerminalAccess: React.FC = () => {
         fitAddon.fit();
 
         termRef.current = term;
+        fitAddonRef.current = fitAddon;
 
         // Connect to WebSocket
         connectWebSocket(term);
@@ -212,8 +216,99 @@ const TerminalAccess: React.FC = () => {
     }
   };
 
+  const createNewSession = () => {
+    const newId = Math.max(...sessions.map(s => s.id)) + 1;
+    setSessions(prev => [
+      ...prev.map(s => ({ ...s, active: false })),
+      { id: newId, name: `root@zubenko.de`, active: true }
+    ]);
+    setActiveSession(newId);
+    
+    // Reload terminal for new session
+    if (termRef.current) {
+      termRef.current.reset();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+      // Reconnect will happen automatically via connectWebSocket
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+
+    if (!isFullscreen) {
+      // Enter fullscreen
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen();
+      } else if ((containerRef.current as any).webkitRequestFullscreen) {
+        (containerRef.current as any).webkitRequestFullscreen();
+      } else if ((containerRef.current as any).msRequestFullscreen) {
+        (containerRef.current as any).msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+
+    // Resize terminal after fullscreen change
+    setTimeout(() => {
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+        if (ws && ws.readyState === WebSocket.OPEN && termRef.current) {
+          ws.send(JSON.stringify({ 
+            type: 'resize', 
+            rows: termRef.current.rows, 
+            cols: termRef.current.cols 
+          }));
+        }
+      }
+    }, 100);
+  };
+
+  const clearTerminal = () => {
+    if (termRef.current) {
+      termRef.current.clear();
+    }
+  };
+
+  const closeSession = (sessionId: number) => {
+    if (sessions.length === 1) {
+      alert('Mindestens eine Session muss geöffnet bleiben');
+      return;
+    }
+    
+    setSessions(prev => {
+      const filtered = prev.filter(s => s.id !== sessionId);
+      if (activeSession === sessionId && filtered.length > 0) {
+        filtered[0].active = true;
+        setActiveSession(filtered[0].id);
+      }
+      return filtered;
+    });
+  };
+
+  const sendCommand = (cmd: string) => {
+    if (termRef.current && ws && ws.readyState === WebSocket.OPEN) {
+      // Send command character by character
+      for (let char of cmd) {
+        ws.send(JSON.stringify({ type: 'input', data: char }));
+      }
+      // Send enter key
+      ws.send(JSON.stringify({ type: 'input', data: '\r' }));
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={containerRef}>
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
@@ -223,11 +318,18 @@ const TerminalAccess: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <button className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm transition border border-slate-700">
+          <button 
+            onClick={createNewSession}
+            className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm transition border border-slate-700"
+          >
             <Plus className="w-4 h-4" />
             <span>Neue Session</span>
           </button>
-          <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition">
+          <button 
+            onClick={toggleFullscreen}
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition"
+            title={isFullscreen ? 'Vollbild beenden' : 'Vollbild'}
+          >
             <Maximize2 className="w-4 h-4" />
           </button>
         </div>
@@ -253,10 +355,18 @@ const TerminalAccess: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-2">
-            <button className="p-2 text-slate-500 hover:text-red-400 transition" title="Session beenden">
+            <button 
+              onClick={() => closeSession(activeSession)}
+              className="p-2 text-slate-500 hover:text-red-400 transition" 
+              title="Session beenden"
+            >
               <Power className="w-4 h-4" />
             </button>
-            <button className="p-2 text-slate-500 hover:text-white transition" title="Terminal leeren">
+            <button 
+              onClick={clearTerminal}
+              className="p-2 text-slate-500 hover:text-white transition" 
+              title="Terminal leeren"
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -277,16 +387,28 @@ const TerminalAccess: React.FC = () => {
           Schnellzugriff
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <button className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700">
+          <button 
+            onClick={() => sendCommand('systemctl status admin-api.service')}
+            className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700"
+          >
             systemctl status
           </button>
-          <button className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700">
+          <button 
+            onClick={() => sendCommand('docker ps -a')}
+            className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700"
+          >
             docker ps
           </button>
-          <button className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700">
+          <button 
+            onClick={() => sendCommand('htop')}
+            className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700"
+          >
             htop
           </button>
-          <button className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700">
+          <button 
+            onClick={() => sendCommand('journalctl -f -n 50')}
+            className="px-3 py-2 bg-slate-900/50 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700"
+          >
             journalctl -f
           </button>
         </div>
