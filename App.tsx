@@ -8,6 +8,7 @@ import TerminalAccess from './components/TerminalAccess';
 import SecurityLogs from './components/SecurityLogs';
 import SystemSettings from './components/SystemSettings';
 import UserManagement from './components/UserManagement';
+import Notifications from './components/Notifications';
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
@@ -15,10 +16,39 @@ import { Bell, User, LogOut } from 'lucide-react';
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { isAuthenticated, login, logout } = useAuth();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [systemInfo, setSystemInfo] = useState({
     osVersion: 'Loading...',
     hostname: 'Loading...'
   });
+
+  useEffect(() => {
+    // Fetch unread notifications count
+    fetch('/api/notifications')
+      .then(res => res.json())
+      .then(data => setUnreadCount(data.unreadCount || 0))
+      .catch(err => console.error('Error fetching notifications:', err));
+
+    // Connect to WebSocket for real-time updates
+    if (isAuthenticated) {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${protocol}://${window.location.host}/ws/notifications`);
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'notification') {
+          setUnreadCount(prev => prev + 1);
+        } else if (data.type === 'notifications_init') {
+          setUnreadCount(data.data.filter((n: any) => !n.read).length);
+        }
+      };
+
+      return () => {
+        if (ws.readyState === 1) ws.close();
+      };
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -73,11 +103,25 @@ const AppContent: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-6">
-            <button className="relative p-2 text-slate-400 hover:text-white transition group">
+          <div className="flex items-center space-x-6 relative">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-slate-400 hover:text-white transition group"
+            >
               <Bell className="w-6 h-6" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full border-2 border-slate-950 group-hover:scale-125 transition"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 bg-orange-500 rounded-full border-2 border-slate-950 text-white text-xs font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
+
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute top-12 right-0 z-50">
+                <Notifications onClose={() => setShowNotifications(false)} />
+              </div>
+            )}
             
             <div className="flex items-center space-x-4 pl-6 border-l border-slate-800">
               <div className="text-right">

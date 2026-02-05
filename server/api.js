@@ -50,8 +50,91 @@ if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
 
+// Notifications System
+const notifications = [];
+const MAX_NOTIFICATIONS = 50;
+
+const addNotification = (type, title, message, data = {}) => {
+  const notification = {
+    id: Date.now().toString(),
+    type, // 'error', 'warning', 'info', 'success'
+    title,
+    message,
+    timestamp: new Date().toISOString(),
+    read: false,
+    ...data
+  };
+  
+  notifications.unshift(notification);
+  if (notifications.length > MAX_NOTIFICATIONS) {
+    notifications.pop();
+  }
+  
+  // Broadcast to all WebSocket clients
+  broadcastNotification(notification);
+  
+  return notification;
+};
+
+// WebSocket broadcasts for notifications
+let wsClients = [];
+
+const broadcastNotification = (notification) => {
+  wsClients.forEach(client => {
+    if (client.readyState === 1) { // OPEN
+      try {
+        client.send(JSON.stringify({ type: 'notification', data: notification }));
+      } catch (err) {
+        console.error('Error broadcasting notification:', err);
+      }
+    }
+  });
+};
+
 app.use(cors());
 app.use(express.json());
+
+// Notifications Endpoints
+app.get('/api/notifications', (req, res) => {
+  const unreadCount = notifications.filter(n => !n.read).length;
+  res.json({ 
+    notifications,
+    unreadCount,
+    total: notifications.length 
+  });
+});
+
+app.delete('/api/notifications/:id', (req, res) => {
+  const { id } = req.params;
+  const index = notifications.findIndex(n => n.id === id);
+  
+  if (index === -1) {
+    return res.status(404).json({ error: 'Notification not found' });
+  }
+  
+  notifications.splice(index, 1);
+  res.json({ success: true, message: 'Notification deleted' });
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  const { id } = req.body;
+  
+  if (id === 'all') {
+    notifications.forEach(n => n.read = true);
+  } else {
+    const notification = notifications.find(n => n.id === id);
+    if (notification) {
+      notification.read = true;
+    }
+  }
+  
+  res.json({ success: true });
+});
+
+app.delete('/api/notifications', (req, res) => {
+  notifications.length = 0;
+  res.json({ success: true, message: 'All notifications cleared' });
+});
 
 // System Stats
 app.get('/api/system/stats', async (req, res) => {
@@ -100,7 +183,24 @@ app.get('/api/system/stats', async (req, res) => {
       },
       uptime: uptime.stdout.trim()
     });
+
+    // Generate notifications for high usage
+    const cpuUsageNum = parseFloat(cpuUsage);
+    const memPercentNum = parseFloat(memPercent);
+    const diskPercentNum = (parseInt(usedDisk) / parseInt(totalDisk) * 100);
+
+    if (cpuUsageNum > 85) {
+      addNotification('warning', 'CPU Usage Critical', `CPU usage is at ${cpuUsageNum.toFixed(1)}%`, { component: 'cpu' });
+    }
+    if (memPercentNum > 85) {
+      addNotification('warning', 'Memory Usage Critical', `Memory usage is at ${memPercentNum}%`, { component: 'memory' });
+    }
+    if (diskPercentNum > 85) {
+      addNotification('warning', 'Disk Space Low', `Disk usage is at ${diskPercentNum.toFixed(1)}%`, { component: 'disk' });
+    }
+
   } catch (error) {
+    addNotification('error', 'System Stats Error', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -404,6 +504,32 @@ app.delete('/api/docker/backup/:filename', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// WebSocket Server for Notifications
+const notificationWss = new WebSocketServer({ server, path: '/ws/notifications' });
+
+notificationWss.on('connection', (ws) => {
+  console.log('🔔 New notification WebSocket connection');
+  wsClients.push(ws);
+  
+  // Send current notifications to new client
+  ws.send(JSON.stringify({ 
+    type: 'notifications_init', 
+    data: notifications 
+  }));
+
+  ws.on('close', () => {
+    console.log('🔔 Notification WebSocket disconnected');
+    const index = wsClients.indexOf(ws);
+    if (index > -1) {
+      wsClients.splice(index, 1);
+    }
+  });
+
+  ws.on('error', (err) => {
+    console.error('Notification WebSocket error:', err);
+  });
 });
 
 // WebSocket Server for Terminal
