@@ -29,6 +29,44 @@ const DockerManager: React.FC = () => {
   const [creatingBackup, setCreatingBackup] = useState<string | null>(null);
   const [showBackups, setShowBackups] = useState(false);
 
+  // Custom URL mappings for specific containers
+  const getContainerUrl = (name: string, port: number | null): string | null => {
+    // Special mappings for containers with custom domains
+    const urlMappings: Record<string, string> = {
+      'zubenkoai': 'https://zubenkoai.zubenko.de',
+      'zubenko-ai': 'https://zubenkoai.zubenko.de',
+    };
+
+    // Check if container has a custom URL mapping
+    if (urlMappings[name]) {
+      return urlMappings[name];
+    }
+
+    // Default: use port-based URL
+    if (port) {
+      return `http://zubenko.de:${port}`;
+    }
+
+    return null;
+  };
+
+  const getUrlDisplay = (name: string, port: number | null): string => {
+    const urlMappings: Record<string, string> = {
+      'zubenkoai': 'zubenkoai.zubenko.de',
+      'zubenko-ai': 'zubenkoai.zubenko.de',
+    };
+
+    if (urlMappings[name]) {
+      return urlMappings[name];
+    }
+
+    if (port) {
+      return `zubenko.de:${port}`;
+    }
+
+    return '-';
+  };
+
   useEffect(() => {
     const fetchContainers = async () => {
       try {
@@ -252,19 +290,21 @@ const DockerManager: React.FC = () => {
                   {container.uptime}
                 </td>
                 <td className="px-6 py-4">
-                  {container.port ? (
+                  {getContainerUrl(container.name, container.port) ? (
                     <div className="flex flex-col space-y-1">
-                      <span className="text-xs font-semibold text-blue-400">
-                        Port: {container.port}
-                      </span>
+                      {container.port && (
+                        <span className="text-xs font-semibold text-blue-400">
+                          Port: {container.port}
+                        </span>
+                      )}
                       <a 
-                        href={`http://zubenko.de:${container.port}`}
+                        href={getContainerUrl(container.name, container.port)!}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-orange-400 hover:text-orange-300 flex items-center space-x-1 transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span>zubenko.de:{container.port}</span>
+                        <span>{getUrlDisplay(container.name, container.port)}</span>
                       </a>
                     </div>
                   ) : (
