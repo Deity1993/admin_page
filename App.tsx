@@ -90,6 +90,15 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-slate-950 flex">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
+      {/* Notifications Portal - Above everything */}
+      {showNotifications && (
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-20 right-8 pointer-events-auto z-[9999]">
+            <Notifications onClose={() => setShowNotifications(false)} />
+          </div>
+        </div>
+      )}
+      
       <main className="flex-1 ml-64 p-8 relative overflow-hidden">
         {/* Background blobs for aesthetics */}
         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[500px] h-[500px] bg-orange-500/10 blur-[100px] rounded-full"></div>
@@ -115,13 +124,6 @@ const AppContent: React.FC = () => {
                 </span>
               )}
             </button>
-
-            {/* Notifications Dropdown */}
-            {showNotifications && (
-              <div className="fixed top-20 right-8 z-[9999]">
-                <Notifications onClose={() => setShowNotifications(false)} />
-              </div>
-            )}
             
             <div className="flex items-center space-x-4 pl-6 border-l border-slate-800">
               <div className="text-right">
