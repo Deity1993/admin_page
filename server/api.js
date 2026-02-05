@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
 import http from 'http';
+import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +18,21 @@ const execAsync = promisify(exec);
 const app = express();
 const server = http.createServer(app);
 const PORT = 3002;
+
+// zubenkoai Database Connection
+const ZUBENKOAI_DB_PATH = '/var/www/zubenkoai/ai-voice-to-n8n-orchestrator/server/data/app.db';
+let zubenkoaiDb = null;
+
+try {
+  if (fs.existsSync(ZUBENKOAI_DB_PATH)) {
+    zubenkoaiDb = new Database(ZUBENKOAI_DB_PATH, { readonly: false });
+    console.log('✅ Connected to zubenkoai database');
+  } else {
+    console.warn('⚠️ zubenkoai database not found at:', ZUBENKOAI_DB_PATH);
+  }
+} catch (error) {
+  console.warn('⚠️ Could not connect to zubenkoai database:', error.message);
+}
 
 const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) {
@@ -619,49 +636,26 @@ app.post('/api/system/settings', async (req, res) => {
   }
 });
 
-// User Management Endpoints
-// Storage for users (in production: database)
-const usersFile = path.join(__dirname, 'users.json');
-
-const getUsers = () => {
-  try {
-    if (fs.existsSync(usersFile)) {
-      return JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    }
-  } catch (error) {
-    console.error('Error reading users file:', error);
-  }
-  
-  // Default admin user
-  return [
-    {
-      id: '1',
-      username: 'admin',
-      email: 'admin@zubenko.de',
-      role: 'admin',
-      status: 'active',
-      created: new Date().toISOString(),
-      lastLogin: new Date(Date.now() - 3600000).toISOString()
-    }
-  ];
-};
-
-const saveUsers = (users) => {
-  try {
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error('Error saving users file:', error);
-    return false;
-  }
-};
-
+// User Management Endpoints (zubenkoai Database)
 app.get('/api/users', async (req, res) => {
   try {
-    const users = getUsers();
-    // Don't send passwords to frontend
-    const safeUsers = users.map(({ password, ...user }) => user);
-    res.json({ users: safeUsers });
+    if (!zubenkoaiDb) {
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+
+    const users = zubenkoaiDb.prepare('SELECT id, username, created_at FROM users ORDER BY id DESC').all();
+    
+    const usersWithMetadata = users.map(user => ({
+      id: user.id.toString(),
+      username: user.username,
+      email: user.username + '@zubenkoai', // Username is used as email
+      role: user.id === 1 ? 'admin' : 'user', // ID 1 is admin (from screenshot)
+      status: 'active',
+      created: user.created_at || new Date().toISOString(),
+      lastLogin: null
+    }));
+
+    res.json({ users: usersWithMetadata });
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -670,42 +664,41 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
-    
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!zubenkoaiDb) {
+      return res.status(503).json({ error: 'Database connection not available' });
     }
+
+    const { username, password } = req.body;
     
-    const users = getUsers();
-    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
     // Check if user already exists
-    if (users.some(u => u.username === username)) {
+    const existing = zubenkoaiDb.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (existing) {
       return res.status(409).json({ error: 'Username already exists' });
     }
-    
-    const newUser = {
-      id: Date.now().toString(),
-      username,
-      email,
-      password: Buffer.from(password).toString('base64'), // Simple encoding, use bcrypt in production
-      role: role || 'user',
-      status: 'active',
-      created: new Date().toISOString(),
-      lastLogin: null
-    };
-    
-    users.push(newUser);
-    
-    if (saveUsers(users)) {
-      const { password, ...safeUser } = newUser;
-      res.status(201).json({ 
-        success: true, 
-        user: safeUser,
-        message: 'User created successfully'
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to create user' });
-    }
+
+    // Hash password with bcrypt
+    const passwordHash = bcrypt.hashSync(password, 10);
+
+    // Insert new user
+    const result = zubenkoaiDb.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(username, passwordHash);
+
+    res.status(201).json({
+      success: true,
+      user: {
+        id: result.lastInsertRowid.toString(),
+        username,
+        email: username + '@zubenkoai',
+        role: 'user',
+        status: 'active',
+        created: new Date().toISOString(),
+        lastLogin: null
+      },
+      message: 'User created successfully'
+    });
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });
@@ -714,40 +707,41 @@ app.post('/api/users', async (req, res) => {
 
 app.put('/api/users/:id', async (req, res) => {
   try {
+    if (!zubenkoaiDb) {
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+
     const { id } = req.params;
-    const { username, email, role, status } = req.body;
-    
-    const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-    
-    if (userIndex === -1) {
+    const { username } = req.body;
+
+    // Check if user exists
+    const user = zubenkoaiDb.prepare('SELECT id, username, created_at FROM users WHERE id = ?').get(id);
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
-    const user = users[userIndex];
-    
-    // Update fields
+
+    // Update username if provided and unique
     if (username && username !== user.username) {
-      if (users.some(u => u.username === username && u.id !== id)) {
+      const existing = zubenkoaiDb.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, id);
+      if (existing) {
         return res.status(409).json({ error: 'Username already exists' });
       }
-      user.username = username;
+      zubenkoaiDb.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, id);
     }
-    
-    if (email) user.email = email;
-    if (role) user.role = role;
-    if (status) user.status = status;
-    
-    if (saveUsers(users)) {
-      const { password, ...safeUser } = user;
-      res.json({ 
-        success: true, 
-        user: safeUser,
-        message: 'User updated successfully'
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to update user' });
-    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id.toString(),
+        username: username || user.username,
+        email: (username || user.username) + '@zubenkoai',
+        role: user.id === 1 ? 'admin' : 'user',
+        status: 'active',
+        created: user.created_at,
+        lastLogin: null
+      },
+      message: 'User updated successfully'
+    });
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: 'Failed to update user' });
@@ -756,30 +750,31 @@ app.put('/api/users/:id', async (req, res) => {
 
 app.put('/api/users/:id/password', async (req, res) => {
   try {
+    if (!zubenkoaiDb) {
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+
     const { id } = req.params;
     const { password } = req.body;
-    
+
     if (!password) {
       return res.status(400).json({ error: 'Password is required' });
     }
-    
-    const users = getUsers();
-    const user = users.find(u => u.id === id);
-    
+
+    // Check if user exists
+    const user = zubenkoaiDb.prepare('SELECT id FROM users WHERE id = ?').get(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
-    user.password = Buffer.from(password).toString('base64');
-    
-    if (saveUsers(users)) {
-      res.json({ 
-        success: true,
-        message: 'Password changed successfully'
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to change password' });
-    }
+
+    // Hash password with bcrypt
+    const passwordHash = bcrypt.hashSync(password, 10);
+    zubenkoaiDb.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
   } catch (error) {
     console.error('Error changing password:', error);
     res.status(500).json({ error: 'Failed to change password' });
@@ -788,36 +783,37 @@ app.put('/api/users/:id/password', async (req, res) => {
 
 app.delete('/api/users/:id', async (req, res) => {
   try {
+    if (!zubenkoaiDb) {
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+
     const { id } = req.params;
-    
-    const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-    
-    if (userIndex === -1) {
+
+    // Check if user exists
+    const user = zubenkoaiDb.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
-    // Prevent deleting the last admin
-    const user = users[userIndex];
-    if (user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1) {
-      return res.status(403).json({ error: 'Cannot delete the last admin user' });
+
+    // Prevent deleting admin user (ID 1)
+    if (id === '1' || id === 1) {
+      return res.status(403).json({ error: 'Cannot delete the admin user' });
     }
-    
-    users.splice(userIndex, 1);
-    
-    if (saveUsers(users)) {
-      res.json({ 
-        success: true,
-        message: 'User deleted successfully'
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to delete user' });
-    }
+
+    zubenkoaiDb.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
+
+// Old file-based User Management Endpoints (kept for backwards compatibility)
+
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Admin API Server running on port ${PORT}`);
