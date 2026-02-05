@@ -5,10 +5,18 @@ import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
 import AsteriskManager from './components/AsteriskManager';
 import GeminiAssistant from './components/GeminiAssistant';
+import { Login } from './components/Login';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { isAuthenticated, login, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    setActiveTab('dashboard');
+  };
 
   const renderContent = () => {
     switch(activeTab) {
@@ -26,6 +34,10 @@ const App: React.FC = () => {
       default: return <Dashboard />;
     }
   };
+
+  if (!isAuthenticated) {
+    return <Login onLogin={login} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex">
@@ -58,7 +70,11 @@ const App: React.FC = () => {
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-slate-600 flex items-center justify-center shadow-lg">
                 <User className="w-5 h-5 text-slate-300" />
               </div>
-              <button className="p-2 text-slate-500 hover:text-red-400 transition" title="Logout">
+              <button 
+                onClick={handleLogout}
+                className="p-2 text-slate-500 hover:text-red-400 transition" 
+                title="Abmelden"
+              >
                 <LogOut className="w-5 h-5" />
               </button>
             </div>
@@ -71,6 +87,14 @@ const App: React.FC = () => {
 
         <GeminiAssistant />
       </main>
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+};
+
     </div>
   );
 };
