@@ -1,0 +1,20 @@
+[Unit]
+Description=Admin Page API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/admin_page/server
+Environment="NODE_ENV=production"
+ExecStart=/usr/bin/node /var/www/admin_page/server/api.js
+
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=admin-api
+
+[Install]
+WantedBy=multi-user.target
