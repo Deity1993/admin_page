@@ -87,6 +87,10 @@ const AppContent: React.FC = () => {
 
         <GeminiAssistant />
       </main>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <AuthProvider>
@@ -95,8 +99,6 @@ const App: React.FC = () => {
   );
 };
 
-    </div>
-  );
-};
+export default App;
 
 export default App;
