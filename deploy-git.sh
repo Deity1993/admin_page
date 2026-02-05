@@ -17,7 +17,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Konfiguration - ANPASSEN!
-GIT_REPO="https://github.com/IhrUsername/admin_page.git"  # Ihre Git Repository URL
+GIT_REPO="https://github.com/Deity1993/admin_page.git"  # Ihre Git Repository URL
 GIT_BRANCH="main"  # oder "master", je nach Repository
 APP_NAME="admin_page"
 APP_DIR="/var/www/$APP_NAME"
