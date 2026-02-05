@@ -20,18 +20,29 @@ const server = http.createServer(app);
 const PORT = 3002;
 
 // zubenkoai Database Connection
-const ZUBENKOAI_DB_PATH = '/var/www/zubenkoai/ai-voice-to-n8n-orchestrator/server/data/app.db';
+// Try Docker volume first, then fallback to filesystem
+const ZUBENKOAI_DB_PATHS = [
+  '/var/lib/docker/volumes/n8n-compose_zubenkoai-data/_data/app.db',
+  '/var/www/zubenkoai/ai-voice-to-n8n-orchestrator/server/data/app.db'
+];
 let zubenkoaiDb = null;
+let ZUBENKOAI_DB_PATH = null;
 
-try {
-  if (fs.existsSync(ZUBENKOAI_DB_PATH)) {
-    zubenkoaiDb = new Database(ZUBENKOAI_DB_PATH, { readonly: false });
-    console.log('✅ Connected to zubenkoai database');
-  } else {
-    console.warn('⚠️ zubenkoai database not found at:', ZUBENKOAI_DB_PATH);
+for (const dbPath of ZUBENKOAI_DB_PATHS) {
+  try {
+    if (fs.existsSync(dbPath)) {
+      zubenkoaiDb = new Database(dbPath, { readonly: false });
+      ZUBENKOAI_DB_PATH = dbPath;
+      console.log('✅ Connected to zubenkoai database at:', dbPath);
+      break;
+    }
+  } catch (error) {
+    console.warn('⚠️ Could not connect to zubenkoai database at', dbPath, ':', error.message);
   }
-} catch (error) {
-  console.warn('⚠️ Could not connect to zubenkoai database:', error.message);
+}
+
+if (!zubenkoaiDb) {
+  console.warn('⚠️ No zubenkoai database found. User management will be unavailable.');
 }
 
 const BACKUP_DIR = path.join(__dirname, 'backups');
