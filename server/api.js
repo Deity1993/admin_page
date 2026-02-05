@@ -163,6 +163,12 @@ app.get('/api/asterisk/extensions', async (req, res) => {
       const firstLine = lines[0].trim();
       const parts = firstLine.split(/\s+/);
       const endpointName = parts[0];
+      
+      // Skip header lines (contains dots or angle brackets)
+      if (endpointName.includes('.') || endpointName.includes('<') || endpointName.includes('>')) {
+        continue;
+      }
+      
       const status = firstLine.includes('Unavail') ? 'Offline' : 'Online';
       
       // Find contact line for IP
