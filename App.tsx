@@ -5,6 +5,8 @@ import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
 import AsteriskManager from './components/AsteriskManager';
 import TerminalAccess from './components/TerminalAccess';
+import SecurityLogs from './components/SecurityLogs';
+import SystemSettings from './components/SystemSettings';
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
@@ -24,6 +26,8 @@ const AppContent: React.FC = () => {
       case 'docker': return <DockerManager />;
       case 'asterisk': return <AsteriskManager />;
       case 'terminal': return <TerminalAccess />;
+      case 'security': return <SecurityLogs />;
+      case 'settings': return <SystemSettings />;
       case 'users': 
         return (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-slate-800/20 border border-slate-700/50 rounded-3xl">
