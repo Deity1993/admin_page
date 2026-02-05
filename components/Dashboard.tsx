@@ -1,10 +1,19 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell 
 } from 'recharts';
 import { Cpu, HardDrive, Activity, Thermometer, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+
+const API_BASE = window.location.origin;
+
+interface SystemStats {
+  cpu: { usage: number; temp: number | null };
+  memory: { total: number; used: number; free: number; percent: number };
+  disk: { total: number; used: number; available: number };
+  uptime: string;
+}
 
 const MOCK_DATA = [
   { name: '00:00', cpu: 32, ram: 45 },
@@ -37,13 +46,59 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 );
 
 const Dashboard: React.FC = () => {
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/system/stats`);
+        const data = await response.json();
+        setStats(data);
+      } catch (error) {
+        console.error('Failed to fetch system stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return <div className="text-center text-slate-400">Loading system stats...</div>;
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="CPU Usage" value="24.5%" icon={<Cpu />} color="text-orange-500" trend={-2.4} />
-        <StatCard title="Memory Usage" value="4.2 / 8.0 GB" icon={<Activity />} color="text-blue-500" trend={1.2} />
-        <StatCard title="Disk Space" value="156 GB Free" icon={<HardDrive />} color="text-purple-500" />
-        <StatCard title="CPU Temp" value="42°C" icon={<Thermometer />} color="text-red-500" trend={-1} />
+        <StatCard 
+          title="CPU Usage" 
+          value={`${stats?.cpu.usage.toFixed(1)}%`} 
+          icon={<Cpu />} 
+          color="text-orange-500" 
+        />
+        <StatCard 
+          title="Memory Usage" 
+          value={`${(stats?.memory.used / 1024).toFixed(1)} / ${(stats?.memory.total / 1024).toFixed(1)} GB`} 
+          icon={<Activity />} 
+          color="text-blue-500" 
+        />
+        <StatCard 
+          title="Disk Space" 
+          value={`${stats?.disk.available} GB Free`} 
+          icon={<HardDrive />} 
+          color="text-purple-500" 
+        />
+        <StatCard 
+          title="Uptime" 
+          value={stats?.uptime || 'N/A'} 
+          icon={<Thermometer />} 
+          color="text-green-500" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

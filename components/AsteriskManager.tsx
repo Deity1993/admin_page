@@ -1,17 +1,52 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, CheckCircle, XCircle, Search, UserPlus, FileText, Settings, Activity } from 'lucide-react';
 import { AsteriskUser } from '../types';
 
-const MOCK_AST_USERS: AsteriskUser[] = [
-  { username: '1001', status: 'Online', ip: '192.168.1.45', lastUsed: '2 mins ago' },
-  { username: '1002', status: 'Offline', ip: '-', lastUsed: '14 hours ago' },
-  { username: '1003', status: 'Online', ip: '192.168.1.12', lastUsed: 'Just now' },
-  { username: '9000', status: 'Offline', ip: '-', lastUsed: '3 days ago' },
-];
+const API_BASE = window.location.origin;
+
+interface AsteriskStats {
+  activeCalls: number;
+  activeChannels: number;
+  registeredPeers: number;
+  totalPeers: number;
+  latency: number;
+}
 
 const AsteriskManager: React.FC = () => {
-  const [users, setUsers] = useState(MOCK_AST_USERS);
+  const [users, setUsers] = useState<AsteriskUser[]>([]);
+  const [stats, setStats] = useState<AsteriskStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [extensionsRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/asterisk/extensions`),
+          fetch(`${API_BASE}/api/asterisk/stats`)
+        ]);
+        
+        const extensionsData = await extensionsRes.json();
+        const statsData = await statsRes.json();
+        
+        setUsers(extensionsData);
+        setStats(statsData);
+      } catch (error) {
+        console.error('Failed to fetch Asterisk data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return <div className="text-center text-slate-400">Loading Asterisk data...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -39,24 +74,23 @@ const AsteriskManager: React.FC = () => {
         <div className="bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-sm">Active Calls</span>
-            {/* Fixed: Added 'Activity' to lucide-react imports */}
             <Activity className="w-4 h-4 text-green-400" />
           </div>
-          <div className="text-3xl font-bold">4</div>
+          <div className="text-3xl font-bold">{stats?.activeCalls || 0}</div>
         </div>
         <div className="bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">Registered WSS</span>
+            <span className="text-slate-400 text-sm">Registered Peers</span>
             <CheckCircle className="w-4 h-4 text-blue-400" />
           </div>
-          <div className="text-3xl font-bold">2 / 4</div>
+          <div className="text-3xl font-bold">{stats?.registeredPeers || 0} / {stats?.totalPeers || 0}</div>
         </div>
         <div className="bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">Server Latency</span>
+            <span className="text-slate-400 text-sm">Active Channels</span>
             <Settings className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="text-3xl font-bold">12ms</div>
+          <div className="text-3xl font-bold">{stats?.activeChannels || 0}</div>
         </div>
       </div>
 

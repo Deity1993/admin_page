@@ -1,18 +1,52 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Square, RotateCw, ExternalLink, MoreVertical, Search, Plus, Box } from 'lucide-react';
 import { ServiceStatus, ContainerInfo } from '../types';
 
-const INITIAL_CONTAINERS: ContainerInfo[] = [
-  { id: 'c1', name: 'n8n_automation', image: 'n8nio/n8n:latest', status: ServiceStatus.RUNNING, uptime: '12 days', port: 5678 },
-  { id: 'c2', name: 'my_custom_app', image: 'local/custom-node-app:v1.2', status: ServiceStatus.RUNNING, uptime: '4 days', port: 3000 },
-  { id: 'c3', name: 'redis_cache', image: 'redis:alpine', status: ServiceStatus.STOPPED, uptime: '0s', port: 6379 },
-  { id: 'c4', name: 'postgres_db', image: 'postgres:15-alpine', status: ServiceStatus.RUNNING, uptime: '12 days', port: 5432 },
-];
+const API_BASE = window.location.origin;
+
+interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  uptime: string;
+  port: number | null;
+}
 
 const DockerManager: React.FC = () => {
-  const [containers, setContainers] = useState(INITIAL_CONTAINERS);
+  const [containers, setContainers] = useState<ContainerInfo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const fetchContainers = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/docker/containers`);
+        const data: DockerContainer[] = await response.json();
+        
+        const mapped: ContainerInfo[] = data.map(c => ({
+          id: c.id,
+          name: c.name,
+          image: c.image,
+          status: c.status === 'running' ? ServiceStatus.RUNNING : ServiceStatus.STOPPED,
+          uptime: c.uptime,
+          port: c.port || 0
+        }));
+        
+        setContainers(mapped);
+      } catch (error) {
+        console.error('Failed to fetch containers:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContainers();
+    const interval = setInterval(fetchContainers, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleStatus = (id: string) => {
     setContainers(prev => prev.map(c => 
@@ -23,6 +57,10 @@ const DockerManager: React.FC = () => {
   };
 
   const filtered = containers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+  if (loading) {
+    return <div className="text-center text-slate-400">Loading Docker containers...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
