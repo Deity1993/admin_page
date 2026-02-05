@@ -252,9 +252,24 @@ const DockerManager: React.FC = () => {
                   {container.uptime}
                 </td>
                 <td className="px-6 py-4">
-                  <span className="text-xs font-semibold text-blue-400 flex items-center">
-                    {container.port} <ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </span>
+                  {container.port ? (
+                    <div className="flex flex-col space-y-1">
+                      <span className="text-xs font-semibold text-blue-400">
+                        Port: {container.port}
+                      </span>
+                      <a 
+                        href={`http://zubenko.de:${container.port}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-orange-400 hover:text-orange-300 flex items-center space-x-1 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>zubenko.de:{container.port}</span>
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500">-</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end space-x-2">
