@@ -127,10 +127,12 @@ app.get('/api/asterisk/stats', async (req, res) => {
     const activeChannels = activeChannelsMatch ? parseInt(activeChannelsMatch[1]) : 0;
     const activeCalls = activeCallsMatch ? parseInt(activeCallsMatch[1]) : 0;
 
-    // Parse endpoints
-    const peerLines = peers.stdout.split('\n').filter(line => line.trim() && !line.includes('Endpoint:') && !line.includes('==='));
-    const totalPeers = peerLines.length;
-    const onlinePeers = peerLines.filter(line => line.includes('Avail')).length;
+    // Parse endpoints - count lines that start with " Endpoint:"
+    const endpointLines = peers.stdout.split('\n').filter(line => line.trim().startsWith('Endpoint:'));
+    const totalPeers = endpointLines.length;
+    
+    // Count endpoints that are available (not "Not in use" or "Unavail")
+    const onlinePeers = endpointLines.filter(line => !line.includes('Unavail')).length;
 
     res.json({
       activeCalls,
@@ -149,20 +151,35 @@ app.get('/api/asterisk/extensions', async (req, res) => {
   try {
     const { stdout } = await execAsync('asterisk -rx "pjsip show endpoints" 2>/dev/null').catch(() => ({ stdout: '' }));
     
-    const lines = stdout.split('\n').filter(line => line.trim() && !line.includes('Endpoint:') && !line.includes('==='));
+    // Parse endpoint sections
+    const sections = stdout.split(/\n Endpoint:/);
+    const extensions = [];
     
-    const extensions = lines.map(line => {
-      const parts = line.trim().split(/\s+/);
-      const username = parts[0];
-      const status = line.includes('Unavail') || line.includes('Offline') ? 'Offline' : 'Online';
+    for (let i = 1; i < sections.length; i++) {
+      const section = sections[i];
+      const lines = section.split('\n');
       
-      return {
-        username,
+      // First line contains endpoint name and status
+      const firstLine = lines[0].trim();
+      const parts = firstLine.split(/\s+/);
+      const endpointName = parts[0];
+      const status = firstLine.includes('Unavail') ? 'Offline' : 'Online';
+      
+      // Find contact line for IP
+      let ip = '-';
+      const contactLine = lines.find(line => line.trim().startsWith('Contact:'));
+      if (contactLine && status === 'Online') {
+        const ipMatch = contactLine.match(/(\d+\.\d+\.\d+\.\d+)/);
+        ip = ipMatch ? ipMatch[1] : '-';
+      }
+      
+      extensions.push({
+        username: endpointName,
         status,
-        ip: status === 'Online' ? '192.168.1.x' : '-',
+        ip,
         lastUsed: 'N/A'
-      };
-    });
+      });
+    }
 
     res.json(extensions.length > 0 ? extensions : [
       { username: 'No extensions', status: 'Offline', ip: '-', lastUsed: 'N/A' }
