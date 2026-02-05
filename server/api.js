@@ -647,8 +647,51 @@ app.post('/api/system/settings', async (req, res) => {
   }
 });
 
+// Admin Panel Users Storage
+const adminUsersFile = path.join(__dirname, 'admin_users.json');
+
+const getAdminUsers = () => {
+  try {
+    if (fs.existsSync(adminUsersFile)) {
+      return JSON.parse(fs.readFileSync(adminUsersFile, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading admin users file:', error);
+  }
+  
+  // Default admin user
+  return [
+    {
+      id: '1',
+      username: 'admin',
+      email: 'admin@zubenko.de',
+      password: bcrypt.hashSync('Gßßgl3de123!', 10), // Pre-hashed with bcrypt
+      role: 'admin',
+      status: 'active',
+      created: new Date().toISOString(),
+      lastLogin: null
+    }
+  ];
+};
+
+const saveAdminUsers = (users) => {
+  try {
+    fs.writeFileSync(adminUsersFile, JSON.stringify(users, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving admin users file:', error);
+    return false;
+  }
+};
+
+// Ensure admin users file exists
+if (!fs.existsSync(adminUsersFile)) {
+  saveAdminUsers(getAdminUsers());
+}
+
 // User Management Endpoints (zubenkoai Database)
-app.get('/api/users', async (req, res) => {
+// GET /api/users/zubenkoai
+app.get('/api/users/zubenkoai', async (req, res) => {
   try {
     if (!zubenkoaiDb) {
       return res.status(503).json({ error: 'Database connection not available' });
@@ -659,8 +702,8 @@ app.get('/api/users', async (req, res) => {
     const usersWithMetadata = users.map(user => ({
       id: user.id.toString(),
       username: user.username,
-      email: user.username + '@zubenkoai', // Username is used as email
-      role: user.id === 1 ? 'admin' : 'user', // ID 1 is admin (from screenshot)
+      email: user.username + '@zubenkoai',
+      role: user.id === 1 ? 'admin' : 'user',
       status: 'active',
       created: user.created_at || new Date().toISOString(),
       lastLogin: null
@@ -668,18 +711,19 @@ app.get('/api/users', async (req, res) => {
 
     res.json({ users: usersWithMetadata });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error fetching zubenkoai users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-app.post('/api/users', async (req, res) => {
+// POST /api/users/zubenkoai
+app.post('/api/users/zubenkoai', async (req, res) => {
   try {
     if (!zubenkoaiDb) {
       return res.status(503).json({ error: 'Database connection not available' });
     }
 
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
@@ -702,7 +746,7 @@ app.post('/api/users', async (req, res) => {
       user: {
         id: result.lastInsertRowid.toString(),
         username,
-        email: username + '@zubenkoai',
+        email: email || username + '@zubenkoai',
         role: 'user',
         status: 'active',
         created: new Date().toISOString(),
@@ -711,12 +755,13 @@ app.post('/api/users', async (req, res) => {
       message: 'User created successfully'
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('Error creating zubenkoai user:', error);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+// PUT /api/users/zubenkoai/:id
+app.put('/api/users/zubenkoai/:id', async (req, res) => {
   try {
     if (!zubenkoaiDb) {
       return res.status(503).json({ error: 'Database connection not available' });
@@ -725,13 +770,11 @@ app.put('/api/users/:id', async (req, res) => {
     const { id } = req.params;
     const { username } = req.body;
 
-    // Check if user exists
     const user = zubenkoaiDb.prepare('SELECT id, username, created_at FROM users WHERE id = ?').get(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update username if provided and unique
     if (username && username !== user.username) {
       const existing = zubenkoaiDb.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, id);
       if (existing) {
@@ -754,12 +797,13 @@ app.put('/api/users/:id', async (req, res) => {
       message: 'User updated successfully'
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('Error updating zubenkoai user:', error);
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
-app.put('/api/users/:id/password', async (req, res) => {
+// PUT /api/users/zubenkoai/:id/password
+app.put('/api/users/zubenkoai/:id/password', async (req, res) => {
   try {
     if (!zubenkoaiDb) {
       return res.status(503).json({ error: 'Database connection not available' });
@@ -772,13 +816,11 @@ app.put('/api/users/:id/password', async (req, res) => {
       return res.status(400).json({ error: 'Password is required' });
     }
 
-    // Check if user exists
     const user = zubenkoaiDb.prepare('SELECT id FROM users WHERE id = ?').get(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Hash password with bcrypt
     const passwordHash = bcrypt.hashSync(password, 10);
     zubenkoaiDb.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
 
@@ -787,12 +829,13 @@ app.put('/api/users/:id/password', async (req, res) => {
       message: 'Password changed successfully'
     });
   } catch (error) {
-    console.error('Error changing password:', error);
+    console.error('Error changing zubenkoai user password:', error);
     res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+// DELETE /api/users/zubenkoai/:id
+app.delete('/api/users/zubenkoai/:id', async (req, res) => {
   try {
     if (!zubenkoaiDb) {
       return res.status(503).json({ error: 'Database connection not available' });
@@ -800,13 +843,11 @@ app.delete('/api/users/:id', async (req, res) => {
 
     const { id } = req.params;
 
-    // Check if user exists
     const user = zubenkoaiDb.prepare('SELECT id FROM users WHERE id = ?').get(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Prevent deleting admin user (ID 1)
     if (id === '1' || id === 1) {
       return res.status(403).json({ error: 'Cannot delete the admin user' });
     }
@@ -818,9 +859,185 @@ app.delete('/api/users/:id', async (req, res) => {
       message: 'User deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('Error deleting zubenkoai user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
+});
+
+// ========================
+// Admin Panel Users Endpoints
+// ========================
+
+// GET /api/users/admin-panel
+app.get('/api/users/admin-panel', async (req, res) => {
+  try {
+    const users = getAdminUsers().map(({ password, ...user }) => user);
+    res.json({ users });
+  } catch (error) {
+    console.error('Error fetching admin panel users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// POST /api/users/admin-panel
+app.post('/api/users/admin-panel', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email and password are required' });
+    }
+    
+    const users = getAdminUsers();
+    
+    if (users.some(u => u.username === username)) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    
+    const newUser = {
+      id: Date.now().toString(),
+      username,
+      email,
+      password: bcrypt.hashSync(password, 10),
+      role: 'user',
+      status: 'active',
+      created: new Date().toISOString(),
+      lastLogin: null
+    };
+    
+    users.push(newUser);
+    
+    if (saveAdminUsers(users)) {
+      const { password, ...safeUser } = newUser;
+      res.status(201).json({ 
+        success: true, 
+        user: safeUser,
+        message: 'User created successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to create user' });
+    }
+  } catch (error) {
+    console.error('Error creating admin panel user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// PUT /api/users/admin-panel/:id
+app.put('/api/users/admin-panel/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, role, status } = req.body;
+    
+    const users = getAdminUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = users[userIndex];
+    
+    if (username && username !== user.username) {
+      if (users.some(u => u.username === username && u.id !== id)) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+      user.username = username;
+    }
+    
+    if (email) user.email = email;
+    if (role) user.role = role;
+    if (status) user.status = status;
+    
+    if (saveAdminUsers(users)) {
+      const { password, ...safeUser } = user;
+      res.json({ 
+        success: true, 
+        user: safeUser,
+        message: 'User updated successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to update user' });
+    }
+  } catch (error) {
+    console.error('Error updating admin panel user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// PUT /api/users/admin-panel/:id/password
+app.put('/api/users/admin-panel/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    
+    const users = getAdminUsers();
+    const user = users.find(u => u.id === id);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.password = bcrypt.hashSync(password, 10);
+    
+    if (saveAdminUsers(users)) {
+      res.json({ 
+        success: true,
+        message: 'Password changed successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  } catch (error) {
+    console.error('Error changing admin panel user password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// DELETE /api/users/admin-panel/:id
+app.delete('/api/users/admin-panel/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const users = getAdminUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = users[userIndex];
+    if (user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1) {
+      return res.status(403).json({ error: 'Cannot delete the last admin user' });
+    }
+    
+    users.splice(userIndex, 1);
+    
+    if (saveAdminUsers(users)) {
+      res.json({ 
+        success: true,
+        message: 'User deleted successfully'
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
+  } catch (error) {
+    console.error('Error deleting admin panel user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Legacy endpoint for backwards compatibility
+app.get('/api/users', async (req, res) => {
+  // Redirect to zubenkoai users
+  return fetch('http://localhost:3002/api/users/zubenkoai')
+    .then(r => r.json())
+    .then(data => res.json(data))
+    .catch(err => res.status(500).json({ error: err.message }));
 });
 
 // Old file-based User Management Endpoints (kept for backwards compatibility)

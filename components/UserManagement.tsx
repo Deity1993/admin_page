@@ -18,8 +18,12 @@ interface FormData {
   role: 'admin' | 'user';
 }
 
+type UserSource = 'zubenkoai' | 'admin-panel';
+
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [activeTab, setActiveTab] = useState<UserSource>('zubenkoai');
+  const [zubenkoaiUsers, setZubenkoaiUsers] = useState<User[]>([]);
+  const [adminPanelUsers, setAdminPanelUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -36,9 +40,15 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users');
-      const data = await response.json();
-      setUsers(data.users || []);
+      // Fetch zubenkoai users
+      const zubenkoaiResponse = await fetch('/api/users/zubenkoai');
+      const zubenkoaiData = await zubenkoaiResponse.json();
+      setZubenkoaiUsers(zubenkoaiData.users || []);
+
+      // Fetch admin panel users
+      const adminPanelResponse = await fetch('/api/users/admin-panel');
+      const adminPanelData = await adminPanelResponse.json();
+      setAdminPanelUsers(adminPanelData.users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
       setMessage({ type: 'error', text: 'Failed to load users' });
@@ -46,6 +56,8 @@ const UserManagement: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const users = activeTab === 'zubenkoai' ? zubenkoaiUsers : adminPanelUsers;
 
   useEffect(() => {
     fetchUsers();
@@ -61,10 +73,11 @@ const UserManagement: React.FC = () => {
 
     try {
       let response;
+      const endpoint = `/api/users/${activeTab}`;
       
       if (editingId) {
         // Update user
-        response = await fetch(`/api/users/${editingId}`, {
+        response = await fetch(`${endpoint}/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -80,7 +93,7 @@ const UserManagement: React.FC = () => {
           return;
         }
         
-        response = await fetch('/api/users', {
+        response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
@@ -121,7 +134,8 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/users/${userId}/password`, {
+      const endpoint = `/api/users/${activeTab}/${userId}/password`;
+      const response = await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passwordData })
@@ -147,7 +161,8 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const endpoint = `/api/users/${activeTab}/${userId}`;
+      const response = await fetch(endpoint, {
         method: 'DELETE'
       });
 
@@ -187,7 +202,7 @@ const UserManagement: React.FC = () => {
             <Users className="mr-3 text-purple-500" />
             User Management
           </h2>
-          <p className="text-slate-400 text-sm">Manage application users and permissions</p>
+          <p className="text-slate-400 text-sm">Manage zubenkoai app users and admin panel users</p>
         </div>
         
         <button
@@ -196,6 +211,40 @@ const UserManagement: React.FC = () => {
         >
           <Plus className="w-4 h-4" />
           <span>New User</span>
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-700">
+        <button
+          onClick={() => {
+            setActiveTab('zubenkoai');
+            setShowForm(false);
+            setEditingId(null);
+            setSearch('');
+          }}
+          className={`px-6 py-3 font-semibold transition border-b-2 ${
+            activeTab === 'zubenkoai'
+              ? 'text-purple-400 border-purple-400'
+              : 'text-slate-400 border-transparent hover:text-slate-300'
+          }`}
+        >
+          zubenkoai App Users ({zubenkoaiUsers.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('admin-panel');
+            setShowForm(false);
+            setEditingId(null);
+            setSearch('');
+          }}
+          className={`px-6 py-3 font-semibold transition border-b-2 ${
+            activeTab === 'admin-panel'
+              ? 'text-purple-400 border-purple-400'
+              : 'text-slate-400 border-transparent hover:text-slate-300'
+          }`}
+        >
+          Admin Panel Users ({adminPanelUsers.length})
         </button>
       </div>
 
@@ -209,10 +258,20 @@ const UserManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Tab description */}
+      <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-xl">
+        <p className="text-sm text-slate-300">
+          {activeTab === 'zubenkoai' 
+            ? '🔧 Manage users of the zubenkoai application (voice-to-n8n orchestrator)'
+            : '🛡️ Manage users who can access this admin panel'
+          }
+        </p>
+      </div>
+
       {showForm && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6">
           <h3 className="text-lg font-bold text-white mb-4">
-            {editingId ? 'Edit User' : 'Create New User'}
+            {editingId ? 'Edit User' : `Create New ${activeTab === 'zubenkoai' ? 'zubenkoai' : 'Admin Panel'} User`}
           </h3>
           
           <form onSubmit={handleSubmit} className="space-y-4">
