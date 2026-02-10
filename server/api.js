@@ -56,6 +56,8 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
+const HIDRIVE_DIR = process.env.HIDRIVE_DIR || '/mnt/hidrive';
+
 const getUniqueFilename = (directory, filename) => {
   const safeName = path.basename(filename).replace(/\s+/g, '_');
   const ext = path.extname(safeName);
@@ -69,10 +71,16 @@ const getUniqueFilename = (directory, filename) => {
   return candidate;
 };
 
+const resolveUploadDestination = (req) => {
+  const isHiDrive = req.path && req.path.startsWith('/api/hidrive');
+  return isHiDrive ? HIDRIVE_DIR : UPLOAD_DIR;
+};
+
 const uploadStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  destination: (req, file, cb) => cb(null, resolveUploadDestination(req)),
   filename: (req, file, cb) => {
-    const uniqueName = getUniqueFilename(UPLOAD_DIR, file.originalname);
+    const targetDir = resolveUploadDestination(req);
+    const uniqueName = getUniqueFilename(targetDir, file.originalname);
     cb(null, uniqueName);
   }
 });

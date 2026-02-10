@@ -36,6 +36,7 @@ const FileStorage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [storageTarget, setStorageTarget] = useState<'local' | 'hidrive'>('local');
 
   const usedPercent = useMemo(() => {
     if (!diskSpace.total) return 0;
@@ -56,7 +57,8 @@ const FileStorage: React.FC = () => {
   const fetchFiles = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/files');
+      const endpoint = storageTarget === 'hidrive' ? '/api/hidrive/files' : '/api/files';
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error('Failed to fetch files');
       const data = await res.json();
       setFiles(data.files || []);
@@ -72,6 +74,10 @@ const FileStorage: React.FC = () => {
     fetchDiskSpace();
     fetchFiles();
   }, []);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [storageTarget]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(event.target.files);
@@ -92,7 +98,8 @@ const FileStorage: React.FC = () => {
         formData.append('files', file);
       });
 
-      const res = await fetch('/api/files/upload', {
+      const uploadUrl = storageTarget === 'hidrive' ? '/api/hidrive/upload' : '/api/files/upload';
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         body: formData
       });
@@ -118,7 +125,10 @@ const FileStorage: React.FC = () => {
   const handleDelete = async (name: string) => {
     if (!confirm(`Datei ${name} wirklich löschen?`)) return;
     try {
-      const res = await fetch(`/api/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const deleteUrl = storageTarget === 'hidrive'
+        ? `/api/hidrive/${encodeURIComponent(name)}`
+        : `/api/files/${encodeURIComponent(name)}`;
+      const res = await fetch(deleteUrl, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       await fetchFiles();
       await fetchDiskSpace();
@@ -129,7 +139,10 @@ const FileStorage: React.FC = () => {
   };
 
   const handleDownload = (name: string) => {
-    window.location.href = `/api/files/download/${encodeURIComponent(name)}`;
+    const downloadUrl = storageTarget === 'hidrive'
+      ? `/api/hidrive/download/${encodeURIComponent(name)}`
+      : `/api/files/download/${encodeURIComponent(name)}`;
+    window.location.href = downloadUrl;
   };
 
   return (
@@ -171,7 +184,8 @@ const FileStorage: React.FC = () => {
       </div>
 
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
-        <div className="flex items-center space-x-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+          <div className="flex items-center space-x-4">
           <button
             onClick={() => setActiveTab('upload')}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
@@ -198,6 +212,30 @@ const FileStorage: React.FC = () => {
               <span>Dateien</span>
             </span>
           </button>
+          </div>
+          <div className="flex items-center space-x-2 text-xs text-slate-400">
+            <span>Speicherziel:</span>
+            <button
+              onClick={() => setStorageTarget('local')}
+              className={`px-3 py-1 rounded-lg border ${
+                storageTarget === 'local'
+                  ? 'border-orange-500 text-orange-400'
+                  : 'border-slate-700 text-slate-400 hover:text-white'
+              }`}
+            >
+              Lokal
+            </button>
+            <button
+              onClick={() => setStorageTarget('hidrive')}
+              className={`px-3 py-1 rounded-lg border ${
+                storageTarget === 'hidrive'
+                  ? 'border-orange-500 text-orange-400'
+                  : 'border-slate-700 text-slate-400 hover:text-white'
+              }`}
+            >
+              HiDrive
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -210,7 +248,9 @@ const FileStorage: React.FC = () => {
           <div className="space-y-4">
             <div className="border border-dashed border-slate-700 rounded-2xl p-8 text-center">
               <Upload className="w-8 h-8 text-orange-400 mx-auto mb-3" />
-              <p className="text-slate-300">Dateien auswählen und hochladen</p>
+              <p className="text-slate-300">
+                Dateien auswählen und hochladen ({storageTarget === 'hidrive' ? 'HiDrive' : 'Lokal'})
+              </p>
               <input
                 id="file-upload-input"
                 type="file"
