@@ -723,84 +723,19 @@ app.get('/api/system/disk-space', async (req, res) => {
 // ============================================
 
 app.get('/api/files', async (req, res) => {
-  try {
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      return res.json({ files: [] });
-    }
-
-    const entries = fs.readdirSync(UPLOAD_DIR, { withFileTypes: true });
-    const files = entries
-      .filter(entry => entry.isFile())
-      .map(entry => {
-        const filePath = path.join(UPLOAD_DIR, entry.name);
-        const stats = fs.statSync(filePath);
-        return {
-          name: entry.name,
-          size: stats.size,
-          created: stats.birthtime.toISOString(),
-          modified: stats.mtime.toISOString()
-        };
-      })
-      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-
-    res.json({ files });
-  } catch (error) {
-    console.error('Error listing files:', error);
-    res.status(500).json({ error: 'Failed to list files' });
-  }
+  res.status(410).json({ error: 'Local storage disabled. Use HiDrive endpoints.' });
 });
 
 app.post('/api/files/upload', upload.array('files', 20), async (req, res) => {
-  try {
-    const uploaded = (req.files || []).map(file => ({
-      name: file.filename,
-      originalName: file.originalname,
-      size: file.size
-    }));
-
-    res.json({ success: true, files: uploaded });
-  } catch (error) {
-    console.error('Error uploading files:', error);
-    res.status(500).json({ error: 'Failed to upload files' });
-  }
+  res.status(410).json({ error: 'Local storage disabled. Use HiDrive endpoints.' });
 });
 
 app.get('/api/files/download/:name', (req, res) => {
-  const requested = req.params.name || '';
-  const safeName = path.basename(requested);
-
-  if (!safeName || safeName !== requested) {
-    return res.status(400).json({ error: 'Invalid filename' });
-  }
-
-  const filePath = path.join(UPLOAD_DIR, safeName);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
-  }
-
-  return res.download(filePath, safeName);
+  return res.status(410).json({ error: 'Local storage disabled. Use HiDrive endpoints.' });
 });
 
 app.delete('/api/files/:name', async (req, res) => {
-  try {
-    const requested = req.params.name || '';
-    const safeName = path.basename(requested);
-
-    if (!safeName || safeName !== requested) {
-      return res.status(400).json({ error: 'Invalid filename' });
-    }
-
-    const filePath = path.join(UPLOAD_DIR, safeName);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    fs.unlinkSync(filePath);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    res.status(500).json({ error: 'Failed to delete file' });
-  }
+  res.status(410).json({ error: 'Local storage disabled. Use HiDrive endpoints.' });
 });
 
 // ============================================
