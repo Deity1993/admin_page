@@ -99,6 +99,33 @@ const copyFileStream = (source, destination) => new Promise((resolve, reject) =>
   readStream.pipe(writeStream);
 });
 
+const runAsUser = (username, args) => new Promise((resolve, reject) => {
+  const child = spawn('sudo', ['-u', username, ...args]);
+  let stderr = '';
+
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.on('close', (code) => {
+    if (code === 0) {
+      resolve();
+      return;
+    }
+    reject(new Error(stderr.trim() || `Command failed with exit code ${code}`));
+  });
+
+  child.on('error', reject);
+});
+
+const ensureHiDriveBackupDir = async () => {
+  if (fs.existsSync(HIDRIVE_BACKUP_DIR)) {
+    return;
+  }
+
+  await runAsUser('www-data', ['mkdir', '-p', HIDRIVE_BACKUP_DIR]);
+};
+
 const resolveUploadDestination = (req) => {
   const isHiDrive = req.path && req.path.startsWith('/api/hidrive');
   return isHiDrive ? HIDRIVE_DIR : UPLOAD_DIR;
@@ -1141,14 +1168,18 @@ app.post('/api/backups/:id/upload-hidrive', async (req, res) => {
       return res.status(500).json({ error: 'HiDrive is not mounted' });
     }
 
-    if (!fs.existsSync(HIDRIVE_BACKUP_DIR)) {
-      fs.mkdirSync(HIDRIVE_BACKUP_DIR, { recursive: true });
-    }
+    await ensureHiDriveBackupDir();
 
     const targetName = getUniqueFilename(HIDRIVE_BACKUP_DIR, path.basename(backupPath));
     const targetPath = path.join(HIDRIVE_BACKUP_DIR, targetName);
 
-    await copyFileStream(backupPath, targetPath);
+    try {
+      fs.chmodSync(backupPath, 0o644);
+    } catch (chmodError) {
+      console.warn('Could not adjust backup permissions:', chmodError.message);
+    }
+
+    await runAsUser('www-data', ['cp', backupPath, targetPath]);
 
     res.json({ success: true, filename: targetName });
   } catch (error) {
