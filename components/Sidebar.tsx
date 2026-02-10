@@ -47,8 +47,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'group-hover:text-orange-500'}`} />
-                <span className="font-medium">{item.label}</span>
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'group-hover:text-orange-500'}`} />
+                </span>
+                <span className="font-medium text-left leading-snug whitespace-normal">{item.label}</span>
               </button>
             );
           })}
