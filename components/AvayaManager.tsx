@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Package, FileArchive, AlertCircle, CheckCircle, Search, Filter, Calendar } from 'lucide-react';
+import { Download, Package, FileArchive, AlertCircle, CheckCircle, Search, Filter, Calendar, HardDrive } from 'lucide-react';
 
 interface AvayaFile {
   id: string;
@@ -13,6 +13,12 @@ interface AvayaFile {
   category: string;
 }
 
+interface DiskSpace {
+  total: number;
+  used: number;
+  available: number;
+}
+
 const AvayaManager: React.FC = () => {
   const [files, setFiles] = useState<AvayaFile[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<AvayaFile[]>([]);
@@ -20,9 +26,11 @@ const AvayaManager: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ [key: string]: number }>({});
+  const [diskSpace, setDiskSpace] = useState<DiskSpace | null>(null);
 
   useEffect(() => {
     fetchAvayaFiles();
+    fetchDiskSpace();
   }, []);
 
   useEffect(() => {
@@ -106,6 +114,25 @@ const AvayaManager: React.FC = () => {
     }
   };
 
+  const fetchDiskSpace = async () => {
+    try {
+      const response = await fetch('/api/system/disk-space');
+      if (!response.ok) return;
+      const data = await response.json();
+      setDiskSpace(data);
+    } catch (error) {
+      console.error('Error fetching disk space:', error);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes || Number.isNaN(bytes)) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const index = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, index);
+    return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[index]}`;
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'patch': return <Package className="w-5 h-5" />;
@@ -136,7 +163,7 @@ const AvayaManager: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl">
             <div className="flex items-center justify-between">
               <div>
@@ -181,6 +208,23 @@ const AvayaManager: React.FC = () => {
               </div>
               <div className="p-3 rounded-xl bg-orange-500/20 border border-orange-500/30">
                 <AlertCircle className="w-6 h-6 text-orange-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm font-medium mb-1">Disk Space</p>
+                <h3 className="text-2xl font-bold text-white">
+                  {diskSpace ? formatBytes(diskSpace.available) : 'Loading...'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {diskSpace ? `${formatBytes(diskSpace.used)} used` : ''}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-700/40 border border-slate-600/40">
+                <HardDrive className="w-6 h-6 text-slate-300" />
               </div>
             </div>
           </div>
