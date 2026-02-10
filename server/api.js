@@ -1,5 +1,5 @@
 import express from 'express';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import cors from 'cors';
 import fs from 'fs';
@@ -846,6 +846,344 @@ app.delete('/api/files/:name', async (req, res) => {
   } catch (error) {
     console.error('Error deleting file:', error);
     res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// GET list of backups
+app.get('/api/backups', async (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) {
+      return res.json({ backups: [] });
+    }
+
+    const files = fs.readdirSync(BACKUP_DIR);
+    const backups = files
+      .filter(f => f.endsWith('.tar.gz'))
+      .map(filename => {
+        const filepath = path.join(BACKUP_DIR, filename);
+        const stats = fs.statSync(filepath);
+        const created = stats.birthtime;
+        const size = stats.size;
+
+        // Try to get backup status
+        let status = 'completed';
+        const statusFile = filepath + '.status';
+        if (fs.existsSync(statusFile)) {
+          try {
+            const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+            status = statusData.status || 'completed';
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // Try to get backup notes
+        let notes = '';
+        if (fs.existsSync(statusFile)) {
+          try {
+            const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+            notes = statusData.notes || '';
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        return {
+          id: filename.replace('.tar.gz', ''),
+          filename,
+          size,
+          created: created.toISOString(),
+          status,
+          notes
+        };
+      })
+      .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+
+    res.json({ backups });
+  } catch (error) {
+    console.error('Error listing backups:', error);
+    res.status(500).json({ error: 'Failed to list backups' });
+  }
+});
+
+// POST create new backup
+app.post('/api/backups/create', async (req, res) => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const backupId = `backup-${timestamp}`;
+    const backupPath = path.join(BACKUP_DIR, `${backupId}.tar.gz`);
+    const statusFile = backupPath + '.status';
+
+    // Calculate estimated backup size
+    const excludes = [
+      '/proc',
+      '/sys',
+      '/dev',
+      '/run',
+      '/mnt',
+      '/media',
+      '/tmp',
+      '/var/tmp',
+      '/var/cache',
+      '/var/log',
+      '.cache',
+      '.config/Google',
+      'node_modules',
+      '.git'
+    ];
+
+    const excludeFlags = excludes.map(e => `--exclude='${e}'`).join(' ');
+    const sizeCmd = `du -sb ${excludeFlags} / 2>/dev/null | cut -f1`;
+
+    let estimatedSize = 0;
+    try {
+      const { stdout } = await execAsync(sizeCmd, { shell: '/bin/bash', maxBuffer: 1024 * 1024 * 100 });
+      estimatedSize = parseInt(stdout.trim(), 10) || 0;
+    } catch (e) {
+      estimatedSize = 0;
+    }
+
+    // Write initial status with estimated size
+    fs.writeFileSync(statusFile, JSON.stringify({
+      status: 'in_progress',
+      progress: 0,
+      estimatedSize: estimatedSize,
+      currentSize: 0,
+      startTime: new Date().toISOString()
+    }));
+
+    res.json({ success: true, backupId, estimatedSize });
+
+    // Run backup asynchronously
+    setImmediate(async () => {
+      try {
+        const excludeFlags = [
+          '--exclude=/proc',
+          '--exclude=/sys',
+          '--exclude=/dev',
+          '--exclude=/run',
+          '--exclude=/mnt',
+          '--exclude=/media',
+          '--exclude=/tmp',
+          '--exclude=/var/tmp',
+          '--exclude=/var/cache',
+          '--exclude=/var/log',
+          '--exclude=.cache',
+          '--exclude=.config/Google',
+          '--exclude=node_modules',
+          '--exclude=.git'
+        ];
+
+        // Use tar with ignore-command-error to continue on permission errors
+        const command = `tar --ignore-failed-read -czf "${backupPath}" ${excludeFlags.join(' ')} / 2>&1`;
+
+        // Start tar process and monitor file size
+        const child = spawn('bash', ['-c', command]);
+
+        let lastUpdateTime = Date.now();
+        const monitorInterval = setInterval(() => {
+          if (fs.existsSync(backupPath)) {
+            const stats = fs.statSync(backupPath);
+            const currentSize = stats.size;
+            const progress = estimatedSize > 0 ? Math.min(99, Math.round((currentSize / estimatedSize) * 100)) : 0;
+
+            // Update status every 5 seconds
+            if (Date.now() - lastUpdateTime > 5000) {
+              fs.writeFileSync(statusFile, JSON.stringify({
+                status: 'in_progress',
+                progress: progress,
+                estimatedSize: estimatedSize,
+                currentSize: currentSize,
+                startTime: new Date().toISOString()
+              }));
+              lastUpdateTime = Date.now();
+            }
+          }
+        }, 1000);
+
+        // Wait for process to complete
+        await new Promise((resolve, reject) => {
+          child.on('close', (code) => {
+            clearInterval(monitorInterval);
+            if (code === 0 || code === 1) {
+              resolve();
+            } else {
+              reject(new Error(`tar exited with code ${code}`));
+            }
+          });
+          child.on('error', reject);
+        });
+
+        // Update status to completed
+        fs.writeFileSync(statusFile, JSON.stringify({
+          status: 'completed',
+          progress: 100,
+          estimatedSize: estimatedSize,
+          currentSize: fs.statSync(backupPath).size,
+          startTime: new Date().toISOString(),
+          completedTime: new Date().toISOString()
+        }));
+
+        // Send notification
+        broadcastNotification({
+          id: Date.now().toString(),
+          type: 'success',
+          title: 'Backup Completed',
+          message: `System backup '${backupId}' completed successfully`,
+          timestamp: new Date().toISOString(),
+          read: false
+        });
+      } catch (error) {
+        // Update status to failed
+        fs.writeFileSync(statusFile, JSON.stringify({
+          status: 'failed',
+          progress: 0,
+          error: error.message,
+          startTime: new Date().toISOString()
+        }));
+
+        // Send notification
+        broadcastNotification({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Backup Failed',
+          message: `System backup failed: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          read: false
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Error initiating backup:', error);
+    res.status(500).json({ error: 'Failed to create backup' });
+  }
+});
+
+// GET backup status
+app.get('/api/backups/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+    const statusFile = backupPath + '.status';
+
+    if (!fs.existsSync(statusFile)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+    res.json(statusData);
+  } catch (error) {
+    console.error('Error getting backup status:', error);
+    res.status(500).json({ error: 'Failed to get backup status' });
+  }
+});
+
+// GET download backup file
+app.get('/api/backups/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    const filename = path.basename(backupPath);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/gzip');
+
+    const fileStream = fs.createReadStream(backupPath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error downloading backup:', error);
+    res.status(500).json({ error: 'Failed to download backup' });
+  }
+});
+
+// POST restore backup
+app.post('/api/backups/:id/restore', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    res.json({ success: true, message: 'Restore process started' });
+
+    // Run restore asynchronously with delay to allow response to send
+    setTimeout(async () => {
+      try {
+        // Extract backup (this will overwrite files)
+        const command = `cd / && tar -xzf "${backupPath}" 2>/dev/null && systemctl reboot`;
+
+        await execAsync(command, { maxBuffer: 1024 * 1024 * 100 });
+      } catch (error) {
+        broadcastNotification({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Restore Failed',
+          message: `System restore failed: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          read: false
+        });
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('Error initiating restore:', error);
+    res.status(500).json({ error: 'Failed to restore backup' });
+  }
+});
+
+// DELETE backup
+app.delete('/api/backups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+    const statusFile = backupPath + '.status';
+
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    fs.unlinkSync(backupPath);
+    if (fs.existsSync(statusFile)) {
+      fs.unlinkSync(statusFile);
+    }
+
+    res.json({ success: true, message: 'Backup deleted' });
+  } catch (error) {
+    console.error('Error deleting backup:', error);
+    res.status(500).json({ error: 'Failed to delete backup' });
+  }
+});
+
+// PUT update backup notes
+app.put('/api/backups/:id/notes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+    const statusFile = backupPath + '.status';
+
+    if (!fs.existsSync(statusFile)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    // Read current status
+    const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+
+    // Update notes
+    statusData.notes = notes || '';
+
+    // Write back
+    fs.writeFileSync(statusFile, JSON.stringify(statusData));
+
+    res.json({ success: true, notes: statusData.notes });
+  } catch (error) {
+    console.error('Error updating backup notes:', error);
+    res.status(500).json({ error: 'Failed to update backup notes' });
   }
 });
 
