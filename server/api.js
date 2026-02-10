@@ -803,6 +803,161 @@ app.delete('/api/files/:name', async (req, res) => {
   }
 });
 
+// ============================================
+// HIDRIVE STORAGE ENDPOINTS
+// ============================================
+
+app.get('/api/hidrive/disk-space', async (req, res) => {
+  try {
+    if (!fs.existsSync(HIDRIVE_DIR)) {
+      return res.status(404).json({ error: 'HiDrive mount not found' });
+    }
+
+    const { stdout } = await execAsync(`df -B1 "${HIDRIVE_DIR}" | tail -1`);
+    const parts = stdout.trim().split(/\s+/);
+
+    res.json({
+      total: parseInt(parts[1], 10),
+      used: parseInt(parts[2], 10),
+      available: parseInt(parts[3], 10)
+    });
+  } catch (error) {
+    console.error('Error getting HiDrive disk space:', error);
+    res.status(500).json({ error: 'Failed to get HiDrive disk space' });
+  }
+});
+
+app.get('/api/hidrive/files', async (req, res) => {
+  try {
+    if (!fs.existsSync(HIDRIVE_DIR)) {
+      return res.status(404).json({ error: 'HiDrive mount not found' });
+    }
+
+    const entries = fs.readdirSync(HIDRIVE_DIR, { withFileTypes: true });
+    const files = entries
+      .filter(entry => entry.isFile())
+      .map(entry => {
+        const filePath = path.join(HIDRIVE_DIR, entry.name);
+        const stats = fs.statSync(filePath);
+        return {
+          name: entry.name,
+          size: stats.size,
+          created: stats.birthtime.toISOString(),
+          modified: stats.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+
+    res.json({ files });
+  } catch (error) {
+    console.error('Error listing HiDrive files:', error);
+    res.status(500).json({ error: 'Failed to list HiDrive files' });
+  }
+});
+
+app.post('/api/hidrive/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    if (!fs.existsSync(HIDRIVE_DIR)) {
+      return res.status(404).json({ error: 'HiDrive mount not found' });
+    }
+
+    const uploaded = (req.files || []).map(file => ({
+      name: file.filename,
+      originalName: file.originalname,
+      size: file.size
+    }));
+
+    res.json({ success: true, files: uploaded });
+  } catch (error) {
+    console.error('Error uploading HiDrive files:', error);
+    res.status(500).json({ error: 'Failed to upload HiDrive files' });
+  }
+});
+
+app.get('/api/hidrive/download/:name', (req, res) => {
+  const requested = req.params.name || '';
+  const safeName = path.basename(requested);
+
+  if (!safeName || safeName !== requested) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  const filePath = path.join(HIDRIVE_DIR, safeName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  return res.download(filePath, safeName);
+});
+
+app.delete('/api/hidrive/:name', async (req, res) => {
+  try {
+    const requested = req.params.name || '';
+    const safeName = path.basename(requested);
+
+    if (!safeName || safeName !== requested) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(HIDRIVE_DIR, safeName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting HiDrive file:', error);
+    res.status(500).json({ error: 'Failed to delete HiDrive file' });
+  }
+});
+
+app.post('/api/hidrive/migrate', async (req, res) => {
+  try {
+    if (!fs.existsSync(HIDRIVE_DIR)) {
+      return res.status(404).json({ error: 'HiDrive mount not found' });
+    }
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      return res.json({ moved: 0, skipped: 0, errors: 0 });
+    }
+
+    const entries = fs.readdirSync(UPLOAD_DIR, { withFileTypes: true });
+    let moved = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        skipped += 1;
+        continue;
+      }
+
+      const sourcePath = path.join(UPLOAD_DIR, entry.name);
+      const targetName = getUniqueFilename(HIDRIVE_DIR, entry.name);
+      const targetPath = path.join(HIDRIVE_DIR, targetName);
+
+      try {
+        fs.renameSync(sourcePath, targetPath);
+        moved += 1;
+      } catch (error) {
+        try {
+          fs.copyFileSync(sourcePath, targetPath);
+          fs.unlinkSync(sourcePath);
+          moved += 1;
+        } catch (copyError) {
+          console.error('Failed to migrate file:', entry.name, copyError);
+          errors += 1;
+        }
+      }
+    }
+
+    res.json({ moved, skipped, errors });
+  } catch (error) {
+    console.error('Error migrating files to HiDrive:', error);
+    res.status(500).json({ error: 'Failed to migrate files' });
+  }
+});
+
 // GET list of backups
 app.get('/api/backups', async (req, res) => {
   try {

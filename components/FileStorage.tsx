@@ -36,7 +36,6 @@ const FileStorage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [storageTarget, setStorageTarget] = useState<'local' | 'hidrive'>('local');
 
   const usedPercent = useMemo(() => {
     if (!diskSpace.total) return 0;
@@ -45,7 +44,7 @@ const FileStorage: React.FC = () => {
 
   const fetchDiskSpace = async () => {
     try {
-      const res = await fetch('/api/system/disk-space');
+      const res = await fetch('/api/hidrive/disk-space');
       if (!res.ok) return;
       const data = await res.json();
       setDiskSpace(data);
@@ -57,8 +56,7 @@ const FileStorage: React.FC = () => {
   const fetchFiles = async () => {
     setIsLoading(true);
     try {
-      const endpoint = storageTarget === 'hidrive' ? '/api/hidrive/files' : '/api/files';
-      const res = await fetch(endpoint);
+      const res = await fetch('/api/hidrive/files');
       if (!res.ok) throw new Error('Failed to fetch files');
       const data = await res.json();
       setFiles(data.files || []);
@@ -74,10 +72,6 @@ const FileStorage: React.FC = () => {
     fetchDiskSpace();
     fetchFiles();
   }, []);
-
-  useEffect(() => {
-    fetchFiles();
-  }, [storageTarget]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(event.target.files);
@@ -98,8 +92,7 @@ const FileStorage: React.FC = () => {
         formData.append('files', file);
       });
 
-      const uploadUrl = storageTarget === 'hidrive' ? '/api/hidrive/upload' : '/api/files/upload';
-      const res = await fetch(uploadUrl, {
+      const res = await fetch('/api/hidrive/upload', {
         method: 'POST',
         body: formData
       });
@@ -125,10 +118,7 @@ const FileStorage: React.FC = () => {
   const handleDelete = async (name: string) => {
     if (!confirm(`Datei ${name} wirklich löschen?`)) return;
     try {
-      const deleteUrl = storageTarget === 'hidrive'
-        ? `/api/hidrive/${encodeURIComponent(name)}`
-        : `/api/files/${encodeURIComponent(name)}`;
-      const res = await fetch(deleteUrl, { method: 'DELETE' });
+      const res = await fetch(`/api/hidrive/${encodeURIComponent(name)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       await fetchFiles();
       await fetchDiskSpace();
@@ -139,10 +129,21 @@ const FileStorage: React.FC = () => {
   };
 
   const handleDownload = (name: string) => {
-    const downloadUrl = storageTarget === 'hidrive'
-      ? `/api/hidrive/download/${encodeURIComponent(name)}`
-      : `/api/files/download/${encodeURIComponent(name)}`;
-    window.location.href = downloadUrl;
+    window.location.href = `/api/hidrive/download/${encodeURIComponent(name)}`;
+  };
+
+  const handleMigrate = async () => {
+    try {
+      const res = await fetch('/api/hidrive/migrate', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Migration failed');
+      setMessage(`Übertragen: ${data.moved} Dateien, übersprungen: ${data.skipped}`);
+      await fetchFiles();
+      await fetchDiskSpace();
+    } catch (error) {
+      console.error('Error migrating files:', error);
+      setMessage('Übertragung fehlgeschlagen.');
+    }
   };
 
   return (
@@ -179,7 +180,7 @@ const FileStorage: React.FC = () => {
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
           <p className="text-sm text-slate-400">Dateien gespeichert</p>
           <p className="text-2xl font-semibold text-white mt-2">{files.length}</p>
-          <p className="text-xs text-slate-500 mt-1">Upload-Verzeichnis</p>
+          <p className="text-xs text-slate-500 mt-1">HiDrive</p>
         </div>
       </div>
 
@@ -213,29 +214,14 @@ const FileStorage: React.FC = () => {
             </span>
           </button>
           </div>
-          <div className="flex items-center space-x-2 text-xs text-slate-400">
-            <span>Speicherziel:</span>
+          {activeTab === 'manage' && (
             <button
-              onClick={() => setStorageTarget('local')}
-              className={`px-3 py-1 rounded-lg border ${
-                storageTarget === 'local'
-                  ? 'border-orange-500 text-orange-400'
-                  : 'border-slate-700 text-slate-400 hover:text-white'
-              }`}
+              onClick={handleMigrate}
+              className="px-3 py-2 rounded-xl text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600"
             >
-              Lokal
+              Lokale Dateien nach HiDrive übertragen
             </button>
-            <button
-              onClick={() => setStorageTarget('hidrive')}
-              className={`px-3 py-1 rounded-lg border ${
-                storageTarget === 'hidrive'
-                  ? 'border-orange-500 text-orange-400'
-                  : 'border-slate-700 text-slate-400 hover:text-white'
-              }`}
-            >
-              HiDrive
-            </button>
-          </div>
+          )}
         </div>
 
         {message && (
@@ -248,9 +234,7 @@ const FileStorage: React.FC = () => {
           <div className="space-y-4">
             <div className="border border-dashed border-slate-700 rounded-2xl p-8 text-center">
               <Upload className="w-8 h-8 text-orange-400 mx-auto mb-3" />
-              <p className="text-slate-300">
-                Dateien auswählen und hochladen ({storageTarget === 'hidrive' ? 'HiDrive' : 'Lokal'})
-              </p>
+              <p className="text-slate-300">Dateien auswählen und auf HiDrive hochladen</p>
               <input
                 id="file-upload-input"
                 type="file"
