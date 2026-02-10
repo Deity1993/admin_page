@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
 import AsteriskManager from './components/AsteriskManager';
 import AvayaManager from './components/AvayaManager';
+import FileStorage from './components/FileStorage';
 import TerminalAccess from './components/TerminalAccess';
 import SecurityLogs from './components/SecurityLogs';
 import SystemSettings from './components/SystemSettings';
@@ -76,6 +77,7 @@ const AppContent: React.FC = () => {
       case 'docker': return <DockerManager />;
       case 'asterisk': return <AsteriskManager />;
       case 'avaya': return <AvayaManager />;
+      case 'files': return <FileStorage />;
       case 'terminal': return <TerminalAccess />;
       case 'security': return <SecurityLogs />;
       case 'settings': return <SystemSettings />;

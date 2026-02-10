@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
@@ -49,6 +50,36 @@ const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/var/www/admin_page/uploads';
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const getUniqueFilename = (directory, filename) => {
+  const safeName = path.basename(filename).replace(/\s+/g, '_');
+  const ext = path.extname(safeName);
+  const base = path.basename(safeName, ext);
+  let candidate = safeName;
+  let counter = 1;
+  while (fs.existsSync(path.join(directory, candidate))) {
+    candidate = `${base}_${counter}${ext}`;
+    counter += 1;
+  }
+  return candidate;
+};
+
+const uploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const uniqueName = getUniqueFilename(UPLOAD_DIR, file.originalname);
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage: uploadStorage
+});
 
 // Notifications System
 const notifications = [];
@@ -709,6 +740,112 @@ app.delete('/api/avaya/file/:fileId', async (req, res) => {
   } catch (error) {
     console.error('Error deleting Avaya file:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// BACKUP & RECOVERY ENDPOINTS
+// ============================================
+
+// GET disk space information
+app.get('/api/system/disk-space', async (req, res) => {
+  try {
+    const { stdout } = await execAsync('df -B1 / | tail -1');
+    const parts = stdout.trim().split(/\s+/);
+
+    res.json({
+      total: parseInt(parts[1]),
+      used: parseInt(parts[2]),
+      available: parseInt(parts[3])
+    });
+  } catch (error) {
+    console.error('Error getting disk space:', error);
+    res.status(500).json({ error: 'Failed to get disk space' });
+  }
+});
+
+// ============================================
+// FILE STORAGE ENDPOINTS
+// ============================================
+
+app.get('/api/files', async (req, res) => {
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      return res.json({ files: [] });
+    }
+
+    const entries = fs.readdirSync(UPLOAD_DIR, { withFileTypes: true });
+    const files = entries
+      .filter(entry => entry.isFile())
+      .map(entry => {
+        const filePath = path.join(UPLOAD_DIR, entry.name);
+        const stats = fs.statSync(filePath);
+        return {
+          name: entry.name,
+          size: stats.size,
+          created: stats.birthtime.toISOString(),
+          modified: stats.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+
+    res.json({ files });
+  } catch (error) {
+    console.error('Error listing files:', error);
+    res.status(500).json({ error: 'Failed to list files' });
+  }
+});
+
+app.post('/api/files/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    const uploaded = (req.files || []).map(file => ({
+      name: file.filename,
+      originalName: file.originalname,
+      size: file.size
+    }));
+
+    res.json({ success: true, files: uploaded });
+  } catch (error) {
+    console.error('Error uploading files:', error);
+    res.status(500).json({ error: 'Failed to upload files' });
+  }
+});
+
+app.get('/api/files/download/:name', (req, res) => {
+  const requested = req.params.name || '';
+  const safeName = path.basename(requested);
+
+  if (!safeName || safeName !== requested) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  const filePath = path.join(UPLOAD_DIR, safeName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  return res.download(filePath, safeName);
+});
+
+app.delete('/api/files/:name', async (req, res) => {
+  try {
+    const requested = req.params.name || '';
+    const safeName = path.basename(requested);
+
+    if (!safeName || safeName !== requested) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(UPLOAD_DIR, safeName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({ error: 'Failed to delete file' });
   }
 });
 
