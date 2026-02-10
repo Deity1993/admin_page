@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Download, Upload, Trash2, Clock, HardDrive, AlertCircle, Edit2, X, Check } from 'lucide-react';
+import { Database, Download, Upload, Trash2, Clock, HardDrive, AlertCircle, Edit2, X, Check, Cloud } from 'lucide-react';
 
 interface Backup {
   id: string;
@@ -15,6 +15,7 @@ const BackupManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [backupProgress, setBackupProgress] = useState(0);
   const [estimatedSize, setEstimatedSize] = useState<number | null>(null);
   const [diskSpace, setDiskSpace] = useState({ total: 0, used: 0, available: 0 });
@@ -155,6 +156,30 @@ const BackupManager: React.FC = () => {
       console.error('Error restoring backup:', error);
       alert('Error restoring backup');
       setRestoring(null);
+    }
+  };
+
+  const uploadBackupToHiDrive = async (backup: Backup) => {
+    if (uploading) return;
+
+    setUploading(backup.id);
+    try {
+      const response = await fetch(`/api/backups/${backup.id}/upload-hidrive`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const storedName = data.filename ? ` (${data.filename})` : '';
+        alert(`✅ Backup uploaded to HiDrive${storedName}`);
+      } else {
+        alert('Failed to upload backup to HiDrive: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error uploading backup to HiDrive:', error);
+      alert('Error uploading backup to HiDrive');
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -374,6 +399,19 @@ const BackupManager: React.FC = () => {
                       title="Download backup"
                     >
                       <Download className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      onClick={() => uploadBackupToHiDrive(backup)}
+                      disabled={backup.status !== 'completed' || uploading !== null}
+                      className="p-2 hover:bg-slate-700 rounded-lg transition disabled:text-slate-600 disabled:cursor-not-allowed text-cyan-400"
+                      title="Upload backup to HiDrive"
+                    >
+                      {uploading === backup.id ? (
+                        <span className="animate-spin">⏳</span>
+                      ) : (
+                        <Cloud className="w-5 h-5" />
+                      )}
                     </button>
 
                     <button

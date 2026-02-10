@@ -70,6 +70,13 @@ if (!process.env.HIDRIVE_DIR) {
   }
 }
 
+const HIDRIVE_BACKUP_DIR = path.join(HIDRIVE_DIR, 'backups');
+if (fs.existsSync(HIDRIVE_DIR)) {
+  if (!fs.existsSync(HIDRIVE_BACKUP_DIR)) {
+    fs.mkdirSync(HIDRIVE_BACKUP_DIR, { recursive: true });
+  }
+}
+
 const getUniqueFilename = (directory, filename) => {
   const safeName = path.basename(filename).replace(/\s+/g, '_');
   const ext = path.extname(safeName);
@@ -82,6 +89,15 @@ const getUniqueFilename = (directory, filename) => {
   }
   return candidate;
 };
+
+const copyFileStream = (source, destination) => new Promise((resolve, reject) => {
+  const readStream = fs.createReadStream(source);
+  const writeStream = fs.createWriteStream(destination);
+  readStream.on('error', reject);
+  writeStream.on('error', reject);
+  writeStream.on('finish', resolve);
+  readStream.pipe(writeStream);
+});
 
 const resolveUploadDestination = (req) => {
   const isHiDrive = req.path && req.path.startsWith('/api/hidrive');
@@ -1108,6 +1124,36 @@ app.get('/api/backups/:id/download', async (req, res) => {
   } catch (error) {
     console.error('Error downloading backup:', error);
     res.status(500).json({ error: 'Failed to download backup' });
+  }
+});
+
+// POST upload backup to HiDrive
+app.post('/api/backups/:id/upload-hidrive', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const backupPath = path.join(BACKUP_DIR, `${id}.tar.gz`);
+
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    if (!fs.existsSync(HIDRIVE_DIR)) {
+      return res.status(500).json({ error: 'HiDrive is not mounted' });
+    }
+
+    if (!fs.existsSync(HIDRIVE_BACKUP_DIR)) {
+      fs.mkdirSync(HIDRIVE_BACKUP_DIR, { recursive: true });
+    }
+
+    const targetName = getUniqueFilename(HIDRIVE_BACKUP_DIR, path.basename(backupPath));
+    const targetPath = path.join(HIDRIVE_BACKUP_DIR, targetName);
+
+    await copyFileStream(backupPath, targetPath);
+
+    res.json({ success: true, filename: targetName });
+  } catch (error) {
+    console.error('Error uploading backup to HiDrive:', error);
+    res.status(500).json({ error: 'Failed to upload backup to HiDrive' });
   }
 });
 
