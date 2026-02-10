@@ -543,79 +543,97 @@ if (!fs.existsSync(AVAYA_DIR)) {
   fs.mkdirSync(AVAYA_DIR, { recursive: true });
 }
 
-// Mock Avaya files database (replace with actual file system or database)
-const avayaFiles = [
-  {
-    id: '1',
-    name: 'Avaya_Aura_System_Manager_8.1.3.0_Patch.zip',
-    version: '8.1.3.0',
-    type: 'patch',
-    size: '245 MB',
-    releaseDate: '2025-12-15',
-    description: 'Security patch for Avaya Aura System Manager',
-    downloadUrl: '/downloads/avaya/patch-8.1.3.0.zip',
-    category: 'System Manager',
-    filename: 'avaya-sm-8.1.3.0-patch.zip'
-  },
-  {
-    id: '2',
-    name: 'Avaya_Session_Manager_8.1.2_OVA.ova',
-    version: '8.1.2',
-    type: 'ova',
-    size: '3.2 GB',
-    releaseDate: '2025-11-20',
-    description: 'VMware OVA template for Session Manager 8.1.2',
-    downloadUrl: '/downloads/avaya/session-manager-8.1.2.ova',
-    category: 'Session Manager',
-    filename: 'avaya-session-manager-8.1.2.ova'
-  },
-  {
-    id: '3',
-    name: 'Avaya_Communication_Manager_8.1.1_Firmware.iso',
-    version: '8.1.1',
-    type: 'firmware',
-    size: '1.8 GB',
-    releaseDate: '2025-10-05',
-    description: 'Firmware update for Communication Manager',
-    downloadUrl: '/downloads/avaya/cm-8.1.1.iso',
-    category: 'Communication Manager',
-    filename: 'avaya-cm-8.1.1-firmware.iso'
-  },
-  {
-    id: '4',
-    name: 'Avaya_IP_Office_R11.1.3.4_Upgrade.bin',
-    version: '11.1.3.4',
-    type: 'upgrade',
-    size: '892 MB',
-    releaseDate: '2026-01-10',
-    description: 'Upgrade package for IP Office Server Edition',
-    downloadUrl: '/downloads/avaya/ipo-11.1.3.4.bin',
-    category: 'IP Office',
-    filename: 'avaya-ipo-11.1.3.4-upgrade.bin'
-  },
-  {
-    id: '5',
-    name: 'Avaya_SBC_8.1_OVA_Template.ova',
-    version: '8.1.0',
-    type: 'ova',
-    size: '2.1 GB',
-    releaseDate: '2025-09-12',
-    description: 'Session Border Controller OVA for VMware',
-    downloadUrl: '/downloads/avaya/sbc-8.1.ova',
-    category: 'SBC',
-    filename: 'avaya-sbc-8.1.0-template.ova'
+const formatBytes = (bytes) => {
+  if (!bytes || Number.isNaN(bytes)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, index);
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[index]}`;
+};
+
+const toTitleCase = (value) => {
+  return value
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+const extractVersion = (name) => {
+  const match = name.match(/\d+(?:\.\d+){1,4}/);
+  return match ? match[0] : '';
+};
+
+const detectType = (nameLower, extLower) => {
+  if (nameLower.includes('patch')) return 'patch';
+  if (nameLower.includes('upgrade')) return 'upgrade';
+  if (extLower === '.ova') return 'ova';
+  if (nameLower.includes('firmware') || extLower === '.iso' || extLower === '.bin') return 'firmware';
+  return 'patch';
+};
+
+const buildCategory = (name, version) => {
+  let cleaned = name
+    .replace(/[_-]+/g, ' ')
+    .replace(/\bavaya\b/gi, '')
+    .replace(/\bpatch\b/gi, '')
+    .replace(/\bupgrade\b/gi, '')
+    .replace(/\bfirmware\b/gi, '')
+    .replace(/\bova\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (version) {
+    cleaned = cleaned.replace(version, '').replace(/\s+/g, ' ').trim();
   }
-];
+
+  if (!cleaned) return 'Avaya';
+  const words = cleaned.split(' ').filter(Boolean).slice(0, 4).join(' ');
+  return toTitleCase(words || cleaned);
+};
+
+const getAvayaFiles = () => {
+  if (!fs.existsSync(AVAYA_DIR)) return [];
+  const entries = fs.readdirSync(AVAYA_DIR, { withFileTypes: true });
+  const files = entries
+    .filter(entry => entry.isFile())
+    .map(entry => {
+      const filename = entry.name;
+      const ext = path.extname(filename);
+      const base = path.basename(filename, ext);
+      const nameLower = base.toLowerCase();
+      const extLower = ext.toLowerCase();
+      const version = extractVersion(base);
+      const type = detectType(nameLower, extLower);
+      const category = buildCategory(base, version);
+      const stats = fs.statSync(path.join(AVAYA_DIR, filename));
+      const typeLabel = type.toUpperCase();
+      return {
+        id: filename,
+        name: filename,
+        version,
+        type,
+        size: formatBytes(stats.size),
+        releaseDate: stats.mtime.toISOString(),
+        description: `Avaya ${category} ${typeLabel}`.trim(),
+        downloadUrl: `/api/avaya/download/${encodeURIComponent(filename)}`,
+        category
+      };
+    })
+    .sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+
+  return files;
+};
 
 // Avaya - Get Files List
 app.get('/api/avaya/files', async (req, res) => {
   try {
-    // In production, you might want to read from a database or file system
-    // For now, return the mock data
+    const files = getAvayaFiles();
     res.json({ 
       success: true,
-      files: avayaFiles,
-      total: avayaFiles.length
+      files,
+      total: files.length
     });
   } catch (error) {
     console.error('Error fetching Avaya files:', error);
@@ -627,118 +645,46 @@ app.get('/api/avaya/files', async (req, res) => {
 app.get('/api/avaya/download/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
-    const file = avayaFiles.find(f => f.id === fileId);
+    const requested = fileId || '';
+    const safeName = path.basename(requested);
 
-    if (!file) {
+    if (!safeName || safeName !== requested) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(AVAYA_DIR, safeName);
+    
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // Check if file exists in the avaya-files directory
-    const filePath = path.join(AVAYA_DIR, file.filename);
-    
-    if (!fs.existsSync(filePath)) {
-      // Create a dummy file for demonstration purposes
-      // In production, you would download from Avaya support site or have pre-downloaded files
-      console.log(`Creating dummy file for demonstration: ${file.filename}`);
-      const dummyContent = `This is a placeholder for ${file.name}\n\nIn production, this would be the actual Avaya software file.\n`;
-      fs.writeFileSync(filePath, dummyContent);
-    }
+    const fileName = path.basename(filePath);
 
     // Log download activity
-    addNotification('info', 'Avaya Download', `Started download of ${file.name}`, { 
-      fileId: file.id, 
-      fileName: file.name,
-      type: file.type 
+    addNotification('info', 'Avaya Download', `Started download of ${fileName}`, { 
+      fileId: fileName, 
+      fileName: fileName
     });
 
-    res.download(filePath, file.name, (err) => {
+    res.download(filePath, fileName, (err) => {
       if (err) {
         console.error('Download error:', err);
-        addNotification('error', 'Download Failed', `Failed to download ${file.name}`, { 
-          fileId: file.id, 
+        addNotification('error', 'Download Failed', `Failed to download ${fileName}`, { 
+          fileId: fileName, 
           error: err.message 
         });
         if (!res.headersSent) {
           res.status(500).json({ error: 'Download failed' });
         }
       } else {
-        addNotification('success', 'Download Complete', `Successfully downloaded ${file.name}`, { 
-          fileId: file.id, 
-          fileName: file.name 
+        addNotification('success', 'Download Complete', `Successfully downloaded ${fileName}`, { 
+          fileId: fileName, 
+          fileName: fileName 
         });
       }
     });
   } catch (error) {
     console.error('Error downloading Avaya file:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Avaya - Upload File (for admin to add new files)
-app.post('/api/avaya/upload', async (req, res) => {
-  try {
-    const fileData = req.body;
-    
-    // Validate required fields
-    if (!fileData.name || !fileData.version || !fileData.type) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    // Create new file entry
-    const newFile = {
-      id: (avayaFiles.length + 1).toString(),
-      ...fileData,
-      filename: fileData.filename || `avaya-${fileData.type}-${fileData.version}.bin`
-    };
-
-    avayaFiles.push(newFile);
-    
-    addNotification('success', 'File Added', `Added new Avaya file: ${newFile.name}`, { 
-      fileId: newFile.id 
-    });
-
-    res.json({ 
-      success: true, 
-      file: newFile,
-      message: 'File metadata added successfully' 
-    });
-  } catch (error) {
-    console.error('Error uploading Avaya file:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Avaya - Delete File
-app.delete('/api/avaya/file/:fileId', async (req, res) => {
-  try {
-    const { fileId } = req.params;
-    const fileIndex = avayaFiles.findIndex(f => f.id === fileId);
-
-    if (fileIndex === -1) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    const file = avayaFiles[fileIndex];
-    const filePath = path.join(AVAYA_DIR, file.filename);
-
-    // Delete physical file if exists
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
-    // Remove from array
-    avayaFiles.splice(fileIndex, 1);
-    
-    addNotification('info', 'File Deleted', `Removed Avaya file: ${file.name}`, { 
-      fileId: file.id 
-    });
-
-    res.json({ 
-      success: true, 
-      message: 'File deleted successfully' 
-    });
-  } catch (error) {
-    console.error('Error deleting Avaya file:', error);
     res.status(500).json({ error: error.message });
   }
 });

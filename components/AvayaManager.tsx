@@ -34,10 +34,10 @@ const AvayaManager: React.FC = () => {
     try {
       const response = await fetch('/api/avaya/files');
       const data = await response.json();
-      setFiles(data.files || mockFiles);
+      setFiles(data.files || []);
     } catch (error) {
       console.error('Error fetching Avaya files:', error);
-      setFiles(mockFiles);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
@@ -125,65 +125,6 @@ const AvayaManager: React.FC = () => {
       default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };
-
-  // Mock data for demonstration
-  const mockFiles: AvayaFile[] = [
-    {
-      id: '1',
-      name: 'Avaya_Aura_System_Manager_8.1.3.0_Patch.zip',
-      version: '8.1.3.0',
-      type: 'patch',
-      size: '245 MB',
-      releaseDate: '2025-12-15',
-      description: 'Security patch for Avaya Aura System Manager',
-      downloadUrl: '/downloads/avaya/patch-8.1.3.0.zip',
-      category: 'System Manager'
-    },
-    {
-      id: '2',
-      name: 'Avaya_Session_Manager_8.1.2_OVA.ova',
-      version: '8.1.2',
-      type: 'ova',
-      size: '3.2 GB',
-      releaseDate: '2025-11-20',
-      description: 'VMware OVA template for Session Manager 8.1.2',
-      downloadUrl: '/downloads/avaya/session-manager-8.1.2.ova',
-      category: 'Session Manager'
-    },
-    {
-      id: '3',
-      name: 'Avaya_Communication_Manager_8.1.1_Firmware.iso',
-      version: '8.1.1',
-      type: 'firmware',
-      size: '1.8 GB',
-      releaseDate: '2025-10-05',
-      description: 'Firmware update for Communication Manager',
-      downloadUrl: '/downloads/avaya/cm-8.1.1.iso',
-      category: 'Communication Manager'
-    },
-    {
-      id: '4',
-      name: 'Avaya_IP_Office_R11.1.3.4_Upgrade.bin',
-      version: '11.1.3.4',
-      type: 'upgrade',
-      size: '892 MB',
-      releaseDate: '2026-01-10',
-      description: 'Upgrade package for IP Office Server Edition',
-      downloadUrl: '/downloads/avaya/ipo-11.1.3.4.bin',
-      category: 'IP Office'
-    },
-    {
-      id: '5',
-      name: 'Avaya_SBC_8.1_OVA_Template.ova',
-      version: '8.1.0',
-      type: 'ova',
-      size: '2.1 GB',
-      releaseDate: '2025-09-12',
-      description: 'Session Border Controller OVA for VMware',
-      downloadUrl: '/downloads/avaya/sbc-8.1.ova',
-      category: 'SBC'
-    }
-  ];
 
   return (
     <div className="flex-1 p-8 ml-64">
