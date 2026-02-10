@@ -132,19 +132,6 @@ const FileStorage: React.FC = () => {
     window.location.href = `/api/hidrive/download/${encodeURIComponent(name)}`;
   };
 
-  const handleMigrate = async () => {
-    try {
-      const res = await fetch('/api/hidrive/migrate', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Migration failed');
-      setMessage(`Übertragen: ${data.moved} Dateien, übersprungen: ${data.skipped}`);
-      await fetchFiles();
-      await fetchDiskSpace();
-    } catch (error) {
-      console.error('Error migrating files:', error);
-      setMessage('Übertragung fehlgeschlagen.');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -214,14 +201,7 @@ const FileStorage: React.FC = () => {
             </span>
           </button>
           </div>
-          {activeTab === 'manage' && (
-            <button
-              onClick={handleMigrate}
-              className="px-3 py-2 rounded-xl text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600"
-            >
-              Lokale Dateien nach HiDrive übertragen
-            </button>
-          )}
+          <span className="text-xs text-slate-500">Uploads gehen direkt auf HiDrive.</span>
         </div>
 
         {message && (

@@ -912,51 +912,6 @@ app.delete('/api/hidrive/:name', async (req, res) => {
   }
 });
 
-app.post('/api/hidrive/migrate', async (req, res) => {
-  try {
-    if (!fs.existsSync(HIDRIVE_DIR)) {
-      return res.status(404).json({ error: 'HiDrive mount not found' });
-    }
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      return res.json({ moved: 0, skipped: 0, errors: 0 });
-    }
-
-    const entries = fs.readdirSync(UPLOAD_DIR, { withFileTypes: true });
-    let moved = 0;
-    let skipped = 0;
-    let errors = 0;
-
-    for (const entry of entries) {
-      if (!entry.isFile()) {
-        skipped += 1;
-        continue;
-      }
-
-      const sourcePath = path.join(UPLOAD_DIR, entry.name);
-      const targetName = getUniqueFilename(HIDRIVE_DIR, entry.name);
-      const targetPath = path.join(HIDRIVE_DIR, targetName);
-
-      try {
-        fs.renameSync(sourcePath, targetPath);
-        moved += 1;
-      } catch (error) {
-        try {
-          fs.copyFileSync(sourcePath, targetPath);
-          fs.unlinkSync(sourcePath);
-          moved += 1;
-        } catch (copyError) {
-          console.error('Failed to migrate file:', entry.name, copyError);
-          errors += 1;
-        }
-      }
-    }
-
-    res.json({ moved, skipped, errors });
-  } catch (error) {
-    console.error('Error migrating files to HiDrive:', error);
-    res.status(500).json({ error: 'Failed to migrate files' });
-  }
-});
 
 // GET list of backups
 app.get('/api/backups', async (req, res) => {
