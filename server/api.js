@@ -56,7 +56,19 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-const HIDRIVE_DIR = process.env.HIDRIVE_DIR || '/mnt/hidrive';
+const HIDRIVE_BASE = process.env.HIDRIVE_DIR || '/mnt/hidrive';
+let HIDRIVE_DIR = HIDRIVE_BASE;
+
+if (!process.env.HIDRIVE_DIR) {
+  const usersDir = path.join(HIDRIVE_BASE, 'users');
+  if (fs.existsSync(usersDir)) {
+    const userEntries = fs.readdirSync(usersDir, { withFileTypes: true })
+      .filter(entry => entry.isDirectory());
+    if (userEntries.length === 1) {
+      HIDRIVE_DIR = path.join(usersDir, userEntries[0].name);
+    }
+  }
+}
 
 const getUniqueFilename = (directory, filename) => {
   const safeName = path.basename(filename).replace(/\s+/g, '_');
