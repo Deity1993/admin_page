@@ -70,7 +70,6 @@ if [ ! -f "$APP_DIR/.env.production" ]; then
     print_warning ".env.production nicht gefunden. Erstelle Template..."
     cat > "$APP_DIR/.env.production" << EOF
 GEMINI_API_KEY=your_api_key_here
-NODE_ENV=production
 EOF
     print_warning "WICHTIG: Bitte bearbeiten Sie $APP_DIR/.env.production und fügen Sie Ihren API-Key ein!"
 fi
