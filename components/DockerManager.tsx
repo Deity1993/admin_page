@@ -290,8 +290,7 @@ const DockerManager: React.FC = () => {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-100">Docker Container (einfach erklaert)</h2>
-          <p className="text-sm text-slate-400">Jeder Container zeigt dir jetzt klar: Was ist das? Wofuer ist es da? Was passiert, wenn es ausfaellt?</p>
+          <h2 className="text-2xl font-bold text-slate-100">Docker Container</h2>
         </div>
         <div className="flex items-center space-x-3">
           <div className="relative">
