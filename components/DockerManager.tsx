@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Play, Square, RotateCw, ExternalLink, MoreVertical, Search, Plus, Box, Download, Archive, Trash2 } from 'lucide-react';
+import { Play, Square, RotateCw, ExternalLink, Search, Box, Download, Archive, Trash2, Info, Server, Globe, Shield, Database, Workflow, Clock3 } from 'lucide-react';
 import { ServiceStatus, ContainerInfo } from '../types';
 
 const API_BASE = window.location.origin;
@@ -21,6 +21,14 @@ interface BackupFile {
   containerName: string;
 }
 
+interface ContainerExplanation {
+  role: string;
+  purpose: string;
+  audience: string;
+  impact: string;
+  icon: React.ReactNode;
+}
+
 const DockerManager: React.FC = () => {
   const [containers, setContainers] = useState<ContainerInfo[]>([]);
   const [backups, setBackups] = useState<BackupFile[]>([]);
@@ -28,6 +36,72 @@ const DockerManager: React.FC = () => {
   const [search, setSearch] = useState('');
   const [creatingBackup, setCreatingBackup] = useState<string | null>(null);
   const [showBackups, setShowBackups] = useState(false);
+
+  const getContainerExplanation = (name: string, image: string): ContainerExplanation => {
+    const key = `${name} ${image}`.toLowerCase();
+
+    if (key.includes('traefik')) {
+      return {
+        role: 'Reverse Proxy / Eingangstor',
+        purpose: 'Leitet externe Aufrufe auf die richtigen internen Services weiter und verwaltet Routing.',
+        audience: 'Wichtig fuer Web-Zugriffe von aussen.',
+        impact: 'Wenn dieser Container stoppt, sind mehrere Websites oder APIs eventuell nicht erreichbar.',
+        icon: <Globe className="h-4 w-4 text-cyan-300" />
+      };
+    }
+
+    if (key.includes('n8n')) {
+      return {
+        role: 'Workflow-Automation',
+        purpose: 'Fuehrt Automatisierungen und Integrations-Workflows zwischen verschiedenen Systemen aus.',
+        audience: 'Nuetzlich fuer automatische Prozesse ohne manuelle Eingriffe.',
+        impact: 'Wenn dieser Container stoppt, laufen Automationen nicht mehr weiter.',
+        icon: <Workflow className="h-4 w-4 text-violet-300" />
+      };
+    }
+
+    if (key.includes('zubenkoai') || key.includes('openclaw') || key.includes('ai')) {
+      return {
+        role: 'KI-Service',
+        purpose: 'Stellt KI-Funktionen oder KI-gestuetzte Endpunkte fuer Anwendungen bereit.',
+        audience: 'Relevant fuer Chat-, Analyse- oder Assistenten-Funktionen.',
+        impact: 'Wenn dieser Container stoppt, fallen KI-Features aus oder reagieren langsam.',
+        icon: <Info className="h-4 w-4 text-teal-300" />
+      };
+    }
+
+    if (key.includes('postgres') || key.includes('mysql') || key.includes('mariadb') || key.includes('mongo') || key.includes('redis')) {
+      return {
+        role: 'Datenbank / Speicher',
+        purpose: 'Speichert Daten dauerhaft und liefert sie an andere Container.',
+        audience: 'Kernkomponente fuer Anwendung, Nutzer- und Konfigurationsdaten.',
+        impact: 'Wenn dieser Container stoppt, koennen Anwendungen keine Daten mehr lesen/schreiben.',
+        icon: <Database className="h-4 w-4 text-amber-300" />
+      };
+    }
+
+    if (key.includes('auth') || key.includes('keycloak') || key.includes('oauth') || key.includes('security')) {
+      return {
+        role: 'Authentifizierung / Sicherheit',
+        purpose: 'Verwaltet Login, Rollen und Zugriffsschutz fuer andere Services.',
+        audience: 'Wichtig fuer abgesicherte Benutzeranmeldung.',
+        impact: 'Wenn dieser Container stoppt, koennen Logins und Rechtepruefungen fehlschlagen.',
+        icon: <Shield className="h-4 w-4 text-rose-300" />
+      };
+    }
+
+    return {
+      role: 'Service-Container',
+      purpose: 'Stellt einen technischen Dienst fuer dein System bereit.',
+      audience: 'Pruefe Name/Image fuer den genauen Zweck.',
+      impact: 'Bei Stopp kann genau dieser Dienst oder ein abhaengiger Teil ausfallen.',
+      icon: <Server className="h-4 w-4 text-slate-300" />
+    };
+  };
+
+  const toStatusLabel = (status: ServiceStatus): string => {
+    return status === ServiceStatus.RUNNING ? 'Laeuft' : 'Gestoppt';
+  };
 
   // Custom URL mappings for specific containers
   const getContainerUrl = (name: string, port: number | null): string | null => {
@@ -181,23 +255,53 @@ const DockerManager: React.FC = () => {
 
   const filtered = containers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
+  const runningCount = containers.filter(c => c.status === ServiceStatus.RUNNING).length;
+  const stoppedCount = containers.length - runningCount;
+  const publicCount = containers.filter(c => Boolean(getContainerUrl(c.name, c.port))).length;
+
   if (loading) {
     return <div className="text-center text-slate-400">Loading Docker containers...</div>;
   }
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+      <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-5 shadow-[0_12px_35px_-24px_rgba(2,6,23,0.9)]">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-100">Schnellueberblick</h3>
+            <p className="text-sm text-slate-400">Hier siehst du sofort, ob deine Container gesund laufen und welche nach aussen erreichbar sind.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-emerald-300">Laeuft</p>
+              <p className="mt-1 text-xl font-bold text-emerald-200">{runningCount}</p>
+            </div>
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-rose-300">Gestoppt</p>
+              <p className="mt-1 text-xl font-bold text-rose-200">{stoppedCount}</p>
+            </div>
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-cyan-300">Extern erreichbar</p>
+              <p className="mt-1 text-xl font-bold text-cyan-200">{publicCount}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">Docker Containers</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100">Docker Container (einfach erklaert)</h2>
+          <p className="text-sm text-slate-400">Jeder Container zeigt dir jetzt klar: Was ist das? Wofuer ist es da? Was passiert, wenn es ausfaellt?</p>
+        </div>
         <div className="flex items-center space-x-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
-              placeholder="Filter containers..."
+              placeholder="Container suchen..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+              className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm text-slate-100"
             />
           </div>
           <button 
@@ -207,17 +311,13 @@ const DockerManager: React.FC = () => {
             <Archive className="w-4 h-4" />
             <span>Backups ({backups.length})</span>
           </button>
-          <button className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded-xl transition shadow-lg shadow-orange-900/20 text-sm font-bold">
-            <Plus className="w-4 h-4" />
-            <span>Deploy New</span>
-          </button>
         </div>
       </div>
 
       {showBackups && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl overflow-hidden shadow-xl p-6">
           <h3 className="text-lg font-bold mb-4 flex items-center">
-            <Archive className="w-5 h-5 mr-2 text-orange-400" />
+            <Archive className="w-5 h-5 mr-2 text-teal-300" />
             Verfügbare Backups
           </h3>
           {backups.length === 0 ? (
@@ -259,12 +359,12 @@ const DockerManager: React.FC = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-900/50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
-              <th className="px-6 py-4">Container Name</th>
-              <th className="px-6 py-4">Image</th>
+              <th className="px-6 py-4">Container</th>
+              <th className="px-6 py-4">Was ist das?</th>
               <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">Uptime</th>
-              <th className="px-6 py-4">Port Mapping</th>
-              <th className="px-6 py-4 text-right">Actions</th>
+              <th className="px-6 py-4">Seit wann</th>
+              <th className="px-6 py-4">Zugriff</th>
+              <th className="px-6 py-4 text-right">Aktionen</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700/50">
@@ -273,16 +373,28 @@ const DockerManager: React.FC = () => {
                 <td className="px-6 py-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center border border-slate-700">
-                      {/* Fixed: Added 'Box' to lucide-react imports */}
-                      <Box className="w-4 h-4 text-orange-400" />
+                      <Box className="w-4 h-4 text-teal-300" />
                     </div>
-                    <span className="font-bold text-white">{container.name}</span>
+                    <div>
+                      <p className="font-bold text-white">{container.name}</p>
+                      <p className="code-font text-xs text-slate-400">{container.image}</p>
+                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="code-font text-xs text-slate-400 bg-slate-900/50 px-2 py-1 rounded border border-slate-700">
-                    {container.image}
-                  </span>
+                  {(() => {
+                    const explanation = getContainerExplanation(container.name, container.image);
+                    return (
+                      <div className="space-y-1">
+                        <p className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200">
+                          {explanation.icon}
+                          {explanation.role}
+                        </p>
+                        <p className="text-xs text-slate-400 max-w-sm">{explanation.purpose}</p>
+                        <p className="text-[11px] text-slate-500">{explanation.impact}</p>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-6 py-4">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
@@ -291,17 +403,20 @@ const DockerManager: React.FC = () => {
                     : 'bg-red-400/10 text-red-400 border-red-400/20'
                   }`}>
                     <span className={`w-1.5 h-1.5 rounded-full mr-2 ${container.status === ServiceStatus.RUNNING ? 'bg-green-400' : 'bg-red-400'}`}></span>
-                    {container.status}
+                    {toStatusLabel(container.status)}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-300">
-                  {container.uptime}
+                  <div className="inline-flex items-center gap-2 text-xs text-slate-300">
+                    <Clock3 className="h-3.5 w-3.5 text-slate-400" />
+                    {container.uptime}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   {getContainerUrl(container.name, container.port) ? (
                     <div className="flex flex-col space-y-1">
                       {container.port && (
-                        <span className="text-xs font-semibold text-blue-400">
+                        <span className="text-xs font-semibold text-cyan-300">
                           Port: {container.port}
                         </span>
                       )}
@@ -309,14 +424,14 @@ const DockerManager: React.FC = () => {
                         href={getContainerUrl(container.name, container.port)!}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-orange-400 hover:text-orange-300 flex items-center space-x-1 transition-colors"
+                        className="text-xs text-teal-300 hover:text-teal-200 flex items-center space-x-1 transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         <span>{getUrlDisplay(container.name, container.port)}</span>
                       </a>
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-500">-</span>
+                    <span className="text-xs text-slate-500">Nur intern (kein externer Link)</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -340,15 +455,12 @@ const DockerManager: React.FC = () => {
                         ? 'text-red-400 hover:bg-red-400/10' 
                         : 'text-green-400 hover:bg-green-400/10'
                       }`}
-                      title={container.status === ServiceStatus.RUNNING ? 'Stop' : 'Start'}
+                      title={container.status === ServiceStatus.RUNNING ? 'Container stoppen' : 'Container starten'}
                     >
                       {container.status === ServiceStatus.RUNNING ? <Square className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4" fill="currentColor" />}
                     </button>
-                    <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition">
+                    <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition" title="Status neu laden">
                       <RotateCw className="w-4 h-4" />
-                    </button>
-                    <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition">
-                      <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
                 </td>
@@ -356,6 +468,31 @@ const DockerManager: React.FC = () => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-3xl border border-slate-700/70 bg-slate-900/60 p-6">
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-slate-100">
+          <Info className="h-5 w-5 text-teal-300" />
+          Was bedeuten die wichtigsten Container-Arten?
+        </h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-4 text-sm">
+            <p className="font-semibold text-slate-100">Reverse Proxy (z.B. Traefik)</p>
+            <p className="mt-1 text-slate-400">Nimmt Anfragen aus dem Internet an und leitet sie intern an den richtigen Container weiter.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-4 text-sm">
+            <p className="font-semibold text-slate-100">Automation (z.B. n8n)</p>
+            <p className="mt-1 text-slate-400">Fuehrt Automationen und Integrationen aus, damit Prozesse ohne manuelles Eingreifen laufen.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-4 text-sm">
+            <p className="font-semibold text-slate-100">Datenbank / Speicher</p>
+            <p className="mt-1 text-slate-400">Speichert Daten dauerhaft. Ohne sie funktionieren viele Anwendungen nicht korrekt.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-4 text-sm">
+            <p className="font-semibold text-slate-100">App- / KI-Container</p>
+            <p className="mt-1 text-slate-400">Hier laeuft die eigentliche Anwendung oder KI-Funktion, die du direkt nutzt.</p>
+          </div>
+        </div>
       </div>
     </div>
   );
