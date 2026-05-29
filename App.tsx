@@ -15,7 +15,7 @@ import Notifications from './components/Notifications';
 const OpenClaw = React.lazy(() => import('./components/OpenClaw'));
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Bell, User, LogOut } from 'lucide-react';
+import { Bell, ChevronRight, LogOut, User } from 'lucide-react';
 
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: string }> {
@@ -47,6 +47,20 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     return this.props.children;
   }
 }
+
+const tabMeta: Record<string, { title: string; description: string }> = {
+  dashboard: { title: 'Dashboard', description: 'Live overview of system health and current workload.' },
+  docker: { title: 'Docker Containers', description: 'Manage running containers and deployment processes.' },
+  asterisk: { title: 'Asterisk PBX', description: 'Monitor telephony services and related system state.' },
+  avaya: { title: 'Avaya Software', description: 'Coordinate Avaya artifacts, deployments, and package uploads.' },
+  files: { title: 'Datei Upload', description: 'Transfer files and review server-side storage operations.' },
+  backup: { title: 'Backup & Recovery', description: 'Create snapshots, verify archives, and restore safely.' },
+  users: { title: 'User Management', description: 'Control panel access and administrative permissions.' },
+  terminal: { title: 'Terminal Access', description: 'Run diagnostics and maintenance commands remotely.' },
+  openclaw: { title: 'OpenClaw AI', description: 'Interact with the OpenClaw assistant directly from the admin page.' },
+  security: { title: 'Security & Logs', description: 'Inspect logs, alerts, and security relevant events.' },
+  settings: { title: 'System Settings', description: 'Adjust environment configuration and panel defaults.' },
+};
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -104,6 +118,8 @@ const AppContent: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  const currentTab = tabMeta[activeTab] || tabMeta.dashboard;
+
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard': return <Dashboard />;
@@ -126,7 +142,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-transparent lg:flex">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       {/* Notifications Portal - Above everything */}
@@ -138,54 +154,73 @@ const AppContent: React.FC = () => {
         </div>
       )}
       
-      <main className="flex-1 ml-64 p-8 relative">
-        {/* Background blobs for aesthetics - contained */}
-        <div className="fixed top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[500px] h-[500px] bg-orange-500/10 blur-[100px] rounded-full pointer-events-none z-0"></div>
-        <div className="fixed bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none z-0"></div>
+      <main className="flex-1 px-4 py-4 sm:px-6 lg:ml-80 lg:px-8 lg:py-8 relative">
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+          <div className="absolute left-[-8rem] top-[-5rem] h-72 w-72 rounded-full bg-teal-400/12 blur-3xl"></div>
+          <div className="absolute bottom-[-6rem] right-[-2rem] h-80 w-80 rounded-full bg-sky-300/18 blur-3xl"></div>
+        </div>
 
-        <header className="flex items-center justify-between mb-10 relative z-10">
-          <div>
-            <h2 className="text-3xl font-extrabold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
-            <p className="text-slate-400 text-sm mt-1 flex items-center">
-              {systemInfo.osVersion} • Host: <span className="font-mono ml-1 text-orange-400">{systemInfo.hostname}</span>
-            </p>
-          </div>
+        <div className="relative z-10 mx-auto max-w-7xl">
+          <header className="mb-6 rounded-[2rem] border border-white/70 bg-[rgba(255,255,255,0.82)] px-5 py-5 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:px-7 lg:mb-8 lg:px-8 lg:py-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Admin Control Center
+                  <ChevronRight className="h-3.5 w-3.5 text-teal-700" />
+                  <span className="text-slate-700">{currentTab.title}</span>
+                </div>
+                <div>
+                  <h2 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">{currentTab.title}</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">{currentTab.description}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5">
+                    {systemInfo.osVersion}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5">
+                    Host <span className="code-font ml-1 text-slate-900">{systemInfo.hostname}</span>
+                  </span>
+                </div>
+              </div>
 
-          <div className="flex items-center space-x-6 relative">
-            <button 
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-slate-400 hover:text-white transition group"
-            >
-              <Bell className="w-6 h-6" />
-              {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 bg-orange-500 rounded-full border-2 border-slate-950 text-white text-xs font-bold">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-            
-            <div className="flex items-center space-x-4 pl-6 border-l border-slate-800">
-              <div className="text-right">
-                <p className="text-sm font-bold text-white">Admin User</p>
-                <p className="text-xs text-slate-500">Superuser Access</p>
+              <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/85 text-slate-500 transition hover:border-teal-200 hover:text-teal-700"
+                  aria-label="Benachrichtigungen"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-700 px-1.5 text-[11px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-3 py-2.5 shadow-sm">
+                  <div className="hidden text-right sm:block">
+                    <p className="text-sm font-semibold text-slate-900">Admin User</p>
+                    <p className="text-xs text-slate-500">Superuser Access</p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-slate-100 shadow-sm">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <button 
+                    onClick={handleLogout}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:text-rose-600" 
+                    title="Abmelden"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-slate-600 flex items-center justify-center shadow-lg">
-                <User className="w-5 h-5 text-slate-300" />
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="p-2 text-slate-500 hover:text-red-400 transition" 
-                title="Abmelden"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <section className="relative z-10 pb-24">
-          {renderContent()}
-        </section>
+          <section className="relative z-10 pb-12">
+            {renderContent()}
+          </section>
+        </div>
       </main>
     </div>
   );
