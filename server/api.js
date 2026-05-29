@@ -1276,7 +1276,7 @@ app.put('/api/backups/:id/notes', async (req, res) => {
 });
 
 // WebSocket Server for Notifications
-const notificationWss = new WebSocketServer({ server, path: '/ws/notifications' });
+const notificationWss = new WebSocketServer({ noServer: true });
 
 notificationWss.on('connection', (ws) => {
   console.log('🔔 New notification WebSocket connection');
@@ -1302,7 +1302,7 @@ notificationWss.on('connection', (ws) => {
 });
 
 // WebSocket Server for Terminal
-const wss = new WebSocketServer({ server, path: '/ws/terminal' });
+const wss = new WebSocketServer({ noServer: true });
 
 wss.on('connection', (ws) => {
   console.log('🔌 New terminal WebSocket connection');
@@ -2016,7 +2016,7 @@ app.get('/api/users', async (req, res) => {
 // Old file-based User Management Endpoints (kept for backwards compatibility)
 
 // WebSocket Server for OpenClaw AI Chat
-const openclawWss = new WebSocketServer({ server, path: '/ws/openclaw' });
+const openclawWss = new WebSocketServer({ noServer: true });
 
 openclawWss.on('connection', (clientWs) => {
   console.log('🔌 New OpenClaw WebSocket connection');
@@ -2074,6 +2074,40 @@ openclawWss.on('connection', (clientWs) => {
     console.error('WebSocket error:', err);
     if (gatewayWs && gatewayWs.readyState === 1) gatewayWs.close();
   });
+});
+
+// Single upgrade router prevents path collisions across multiple WebSocket servers.
+server.on('upgrade', (request, socket, head) => {
+  let pathname = '';
+  try {
+    pathname = new URL(request.url || '/', 'http://localhost').pathname;
+  } catch (err) {
+    socket.destroy();
+    return;
+  }
+
+  if (pathname === '/ws/notifications') {
+    notificationWss.handleUpgrade(request, socket, head, (ws) => {
+      notificationWss.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  if (pathname === '/ws/terminal') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  if (pathname === '/ws/openclaw') {
+    openclawWss.handleUpgrade(request, socket, head, (ws) => {
+      openclawWss.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  socket.destroy();
 });
 
 server.listen(PORT, '0.0.0.0', () => {
