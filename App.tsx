@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import DockerManager from './components/DockerManager';
@@ -12,9 +12,41 @@ import SecurityLogs from './components/SecurityLogs';
 import SystemSettings from './components/SystemSettings';
 import UserManagement from './components/UserManagement';
 import Notifications from './components/Notifications';
+const OpenClaw = React.lazy(() => import('./components/OpenClaw'));
 import { Login } from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Bell, User, LogOut } from 'lucide-react';
+
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: string }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Admin UI error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-8">
+          <div className="max-w-xl w-full rounded-2xl border border-red-500/30 bg-red-950/30 p-6">
+            <h1 className="text-2xl font-bold text-red-300 mb-3">Admin UI error</h1>
+            <p className="text-slate-200 mb-2">The page crashed while loading.</p>
+            <pre className="whitespace-pre-wrap text-sm text-red-200 bg-black/30 rounded-lg p-4 overflow-auto">{this.state.error || 'Unknown error'}</pre>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -84,6 +116,7 @@ const AppContent: React.FC = () => {
       case 'security': return <SecurityLogs />;
       case 'settings': return <SystemSettings />;
       case 'users': return <UserManagement />;
+      case 'openclaw': return <Suspense fallback={<div className="text-slate-300">Loading OpenClaw...</div>}><OpenClaw /></Suspense>;
       default: return <Dashboard />;
     }
   };
@@ -161,7 +194,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <ErrorBoundary>
+        <AppContent />
+      </ErrorBoundary>
     </AuthProvider>
   );
 };

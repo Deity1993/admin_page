@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Box, Phone, Users, Settings, Terminal, ShieldCheck, PackageOpen, FolderUp, Database } from 'lucide-react';
+import { LayoutDashboard, Box, Phone, Users, Settings, Terminal, ShieldCheck, PackageOpen, FolderUp, Database, MessageSquare } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -17,6 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'backup', label: 'Backup & Recovery', icon: Database },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'terminal', label: 'Terminal Access', icon: Terminal },
+    { id: 'openclaw', label: 'OpenClaw AI', icon: MessageSquare },
     { id: 'security', label: 'Security/Logs', icon: ShieldCheck },
     { id: 'settings', label: 'System Settings', icon: Settings },
   ];

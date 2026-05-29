@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import pty from 'node-pty';
 import http from 'http';
 import Database from 'better-sqlite3';
@@ -1926,6 +1926,84 @@ app.delete('/api/users/admin-panel/:id', async (req, res) => {
   }
 });
 
+
+// OpenClaw Chat Endpoint (HTTP fallback)
+app.post('/api/openclaw/chat', async (req, res) => {
+  try {
+    const message = (req.body?.message || '').toString().trim();
+    if (!message) {
+      return res.status(400).json({ ok: false, error: 'Message is required' });
+    }
+
+    const args = [
+      'agent',
+      '--agent', 'main',
+      '--session-key', 'web-admin-openclaw',
+      '--message', message,
+    ];
+
+    const child = spawn('openclaw', args, {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+
+    const timer = setTimeout(() => {
+      if (!finished) {
+        child.kill('SIGTERM');
+      }
+    }, 90000);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('close', (code) => {
+      finished = true;
+      clearTimeout(timer);
+
+      const out = (stdout || '').trim();
+      const err = (stderr || '').trim();
+
+      if (code === 0) {
+        return res.json({
+          ok: true,
+          reply: out || 'OpenClaw returned no text response.',
+        });
+      }
+
+      return res.status(500).json({
+        ok: false,
+        error: 'OpenClaw command failed',
+        details: err || out || `Exit code ${code}`,
+      });
+    });
+
+    child.on('error', (error) => {
+      finished = true;
+      clearTimeout(timer);
+      return res.status(500).json({
+        ok: false,
+        error: 'Failed to start OpenClaw process',
+        details: error.message,
+      });
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: 'Unexpected OpenClaw API error',
+      details: error.message,
+    });
+  }
+});
+
 // Legacy endpoint for backwards compatibility
 app.get('/api/users', async (req, res) => {
   // Redirect to zubenkoai users
@@ -1937,6 +2015,67 @@ app.get('/api/users', async (req, res) => {
 
 // Old file-based User Management Endpoints (kept for backwards compatibility)
 
+
+// WebSocket Server for OpenClaw AI Chat
+const openclawWss = new WebSocketServer({ server, path: '/ws/openclaw' });
+
+openclawWss.on('connection', (clientWs) => {
+  console.log('🔌 New OpenClaw WebSocket connection');
+  let gatewayWs = null;
+  
+  const connectToGateway = () => {
+    try {
+      gatewayWs = new WebSocket('ws://127.0.0.1:18789');
+      gatewayWs.onopen = () => {
+        console.log('✅ Connected to OpenClaw gateway');
+        try {
+          clientWs.send(JSON.stringify({ type: 'status', message: 'Connected to OpenClaw gateway' }));
+        } catch (err) {}
+      };
+      gatewayWs.onmessage = (event) => {
+        try {
+          if (clientWs.readyState === 1) clientWs.send(event.data.toString());
+        } catch (err) {console.error('Forward error:', err);}
+      };
+      gatewayWs.onerror = (error) => {
+        console.error('Gateway error:', error.message);
+        try {
+          if (clientWs.readyState === 1) clientWs.send(JSON.stringify({ type: 'error', message: 'Gateway error' }));
+        } catch (err) {}
+      };
+      gatewayWs.onclose = () => {
+        console.log('Gateway closed');
+        try { if (clientWs.readyState === 1) clientWs.close(); } catch (err) {}
+      };
+    } catch (error) {
+      console.error('Connection error:', error);
+      try {
+        if (clientWs.readyState === 1) clientWs.send(JSON.stringify({ type: 'error', message: 'Failed to connect' }));
+      } catch (err) {}
+    }
+  };
+  connectToGateway();
+  
+  clientWs.on('message', (msg) => {
+    try {
+      if (gatewayWs && gatewayWs.readyState === 1) {
+        gatewayWs.send(msg.toString());
+      } else {
+        clientWs.send(JSON.stringify({ type: 'error', message: 'Not connected' }));
+      }
+    } catch (err) {console.error('Message error:', err);}
+  });
+  
+  clientWs.on('close', () => {
+    console.log('🔌 Client closed');
+    if (gatewayWs && gatewayWs.readyState === 1) gatewayWs.close();
+  });
+  
+  clientWs.on('error', (err) => {
+    console.error('WebSocket error:', err);
+    if (gatewayWs && gatewayWs.readyState === 1) gatewayWs.close();
+  });
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Admin API Server running on port ${PORT}`);
