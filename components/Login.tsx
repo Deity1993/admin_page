@@ -24,11 +24,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className="relative min-h-screen overflow-hidden bg-transparent px-4 py-10 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-6rem] top-[-4rem] h-72 w-72 rounded-full bg-teal-300/25 blur-3xl"></div>
-        <div className="absolute bottom-[-8rem] right-[-3rem] h-80 w-80 rounded-full bg-sky-300/20 blur-3xl"></div>
+        <div className="absolute left-[-6rem] top-[-4rem] h-72 w-72 rounded-full bg-teal-500/18 blur-3xl"></div>
+        <div className="absolute bottom-[-8rem] right-[-3rem] h-80 w-80 rounded-full bg-sky-500/14 blur-3xl"></div>
       </div>
 
-      <div className="relative mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center gap-8 rounded-[2rem] border border-white/70 bg-white/55 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.4)] backdrop-blur-xl lg:grid-cols-[1.1fr_0.9fr] lg:p-6">
+      <div className="relative mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center gap-8 rounded-[2rem] border border-slate-700/80 bg-slate-900/30 p-4 shadow-[0_24px_80px_-40px_rgba(2,6,23,0.95)] backdrop-blur-xl lg:grid-cols-[1.1fr_0.9fr] lg:p-6">
         <section className="rounded-[1.75rem] bg-slate-950 px-6 py-8 text-white sm:px-8 sm:py-10">
           <div className="max-w-xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">
@@ -56,18 +56,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         </section>
 
-        <section className="rounded-[1.75rem] border border-slate-200 bg-white/85 p-6 shadow-sm sm:p-8">
+        <section className="rounded-[1.75rem] border border-slate-700 bg-slate-900/85 p-6 shadow-sm sm:p-8">
           <div className="mb-8 text-center">
-            <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-lg shadow-teal-900/20">
+            <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-lg shadow-teal-900/30">
               <Lock className="h-8 w-8" />
             </div>
-            <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-slate-950">Anmelden</h2>
-            <p className="mt-2 text-sm text-slate-500">Melde dich an, um die Serververwaltung zu oeffnen.</p>
+            <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-slate-100">Anmelden</h2>
+            <p className="mt-2 text-sm text-slate-400">Melde dich an, um die Serververwaltung zu oeffnen.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-700">
+              <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-300">
                 Benutzername
               </label>
               <div className="relative">
@@ -79,7 +79,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full rounded-2xl border border-slate-200 bg-slate-50/80 py-3 pl-10 pr-3 text-slate-950 placeholder-slate-400 outline-none transition focus:border-teal-600 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  className="block w-full rounded-2xl border border-slate-700 bg-slate-950/80 py-3 pl-10 pr-3 text-slate-100 placeholder-slate-500 outline-none transition focus:border-teal-500 focus:bg-slate-900 focus:ring-4 focus:ring-teal-500/20"
                   placeholder="Benutzername eingeben"
                   required
                   autoComplete="username"
@@ -88,7 +88,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-700">
+              <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-300">
                 Passwort
               </label>
               <div className="relative">
@@ -100,7 +100,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-2xl border border-slate-200 bg-slate-50/80 py-3 pl-10 pr-3 text-slate-950 placeholder-slate-400 outline-none transition focus:border-teal-600 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  className="block w-full rounded-2xl border border-slate-700 bg-slate-950/80 py-3 pl-10 pr-3 text-slate-100 placeholder-slate-500 outline-none transition focus:border-teal-500 focus:bg-slate-900 focus:ring-4 focus:ring-teal-500/20"
                   placeholder="Passwort eingeben"
                   required
                   autoComplete="current-password"
@@ -116,14 +116,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-200"
+              className="w-full rounded-2xl bg-teal-600 px-4 py-3 font-semibold text-white transition hover:bg-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/25"
             >
               Anmelden
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-400">
               Server Administration Panel v1.0
             </p>
           </div>

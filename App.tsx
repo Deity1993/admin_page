@@ -132,7 +132,7 @@ const AppContent: React.FC = () => {
       case 'security': return <SecurityLogs />;
       case 'settings': return <SystemSettings />;
       case 'users': return <UserManagement />;
-      case 'openclaw': return <Suspense fallback={<div className="text-slate-300">Loading OpenClaw...</div>}><OpenClaw /></Suspense>;
+      case 'openclaw': return <Suspense fallback={<div className="text-slate-400">Loading OpenClaw...</div>}><OpenClaw /></Suspense>;
       default: return <Dashboard />;
     }
   };
@@ -156,29 +156,29 @@ const AppContent: React.FC = () => {
       
       <main className="flex-1 px-4 py-4 sm:px-6 lg:ml-80 lg:px-8 lg:py-8 relative">
         <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-          <div className="absolute left-[-8rem] top-[-5rem] h-72 w-72 rounded-full bg-teal-400/12 blur-3xl"></div>
-          <div className="absolute bottom-[-6rem] right-[-2rem] h-80 w-80 rounded-full bg-sky-300/18 blur-3xl"></div>
+          <div className="absolute left-[-8rem] top-[-5rem] h-72 w-72 rounded-full bg-teal-500/16 blur-3xl"></div>
+          <div className="absolute bottom-[-6rem] right-[-2rem] h-80 w-80 rounded-full bg-sky-500/14 blur-3xl"></div>
         </div>
 
         <div className="relative z-10 mx-auto max-w-7xl">
-          <header className="mb-6 rounded-[2rem] border border-white/70 bg-[rgba(255,255,255,0.82)] px-5 py-5 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:px-7 lg:mb-8 lg:px-8 lg:py-6">
+          <header className="mb-6 rounded-[2rem] border border-slate-700/70 bg-[rgba(15,23,42,0.72)] px-5 py-5 shadow-[0_24px_70px_-35px_rgba(2,6,23,0.8)] backdrop-blur-xl sm:px-7 lg:mb-8 lg:px-8 lg:py-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">
                   Admin Control Center
-                  <ChevronRight className="h-3.5 w-3.5 text-teal-700" />
-                  <span className="text-slate-700">{currentTab.title}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-teal-400" />
+                  <span className="text-slate-100">{currentTab.title}</span>
                 </div>
                 <div>
-                  <h2 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">{currentTab.title}</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">{currentTab.description}</p>
+                  <h2 className="text-3xl font-extrabold tracking-tight text-slate-100 sm:text-4xl">{currentTab.title}</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">{currentTab.description}</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                  <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
                     {systemInfo.osVersion}
                   </span>
-                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5">
-                    Host <span className="code-font ml-1 text-slate-900">{systemInfo.hostname}</span>
+                  <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
+                    Host <span className="code-font ml-1 text-slate-100">{systemInfo.hostname}</span>
                   </span>
                 </div>
               </div>
@@ -186,7 +186,7 @@ const AppContent: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3 lg:justify-end">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/85 text-slate-500 transition hover:border-teal-200 hover:text-teal-700"
+                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900/70 text-slate-300 transition hover:border-teal-500/70 hover:text-teal-300"
                   aria-label="Benachrichtigungen"
                 >
                   <Bell className="h-5 w-5" />
@@ -197,17 +197,17 @@ const AppContent: React.FC = () => {
                   )}
                 </button>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-3 py-2.5 shadow-sm">
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 shadow-sm">
                   <div className="hidden text-right sm:block">
-                    <p className="text-sm font-semibold text-slate-900">Admin User</p>
-                    <p className="text-xs text-slate-500">Superuser Access</p>
+                    <p className="text-sm font-semibold text-slate-100">Admin User</p>
+                    <p className="text-xs text-slate-400">Superuser Access</p>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-slate-100 shadow-sm">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-slate-100 shadow-sm">
                     <User className="h-5 w-5" />
                   </div>
                   <button 
                     onClick={handleLogout}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:text-rose-600" 
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700 text-slate-300 transition hover:border-rose-400/50 hover:text-rose-300" 
                     title="Abmelden"
                   >
                     <LogOut className="h-5 w-5" />

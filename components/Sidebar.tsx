@@ -35,12 +35,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         onClick={() => setActiveTab(item.id)}
         className={`group flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
           isActive
-            ? 'bg-slate-950 text-white shadow-[0_16px_30px_-18px_rgba(15,23,42,0.8)]'
-            : 'text-slate-600 hover:bg-white hover:text-slate-950'
+            ? 'bg-teal-500/20 text-teal-100 shadow-[0_16px_30px_-18px_rgba(20,184,166,0.5)]'
+            : 'text-slate-300 hover:bg-slate-800/70 hover:text-slate-100'
         }`}
       >
-        <span className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${isActive ? 'border-white/10 bg-white/10' : 'border-slate-200 bg-slate-50 group-hover:border-teal-100 group-hover:bg-teal-50'}`}>
-          <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-teal-700'}`} />
+        <span className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${isActive ? 'border-teal-300/30 bg-teal-500/15' : 'border-slate-700 bg-slate-800/80 group-hover:border-teal-400/40 group-hover:bg-teal-500/10'}`}>
+          <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-teal-200' : 'text-slate-400 group-hover:text-teal-300'}`} />
         </span>
         <span className="min-w-0">
           <span className="block text-sm font-semibold leading-tight">{item.label}</span>
@@ -50,25 +50,25 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   };
 
   return (
-    <aside className="fixed inset-x-0 top-0 z-20 border-b border-white/60 bg-[rgba(255,255,255,0.78)] px-4 py-4 backdrop-blur-xl lg:inset-y-0 lg:left-0 lg:right-auto lg:h-screen lg:w-80 lg:border-b-0 lg:border-r lg:px-6 lg:py-6">
-      <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-[rgba(255,255,255,0.72)] p-4 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.4)] lg:p-5">
-        <div className="mb-6 flex items-center gap-3 border-b border-slate-200/80 pb-5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+    <aside className="fixed inset-x-0 top-0 z-20 border-b border-slate-800/80 bg-[rgba(2,6,23,0.84)] px-4 py-4 backdrop-blur-xl lg:inset-y-0 lg:left-0 lg:right-auto lg:h-screen lg:w-80 lg:border-b-0 lg:border-r lg:px-6 lg:py-6">
+      <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-700/80 bg-[rgba(15,23,42,0.76)] p-4 shadow-[0_24px_70px_-35px_rgba(2,6,23,0.95)] lg:p-5">
+        <div className="mb-6 flex items-center gap-3 border-b border-slate-700 pb-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-600/90 text-white shadow-sm">
             <Settings className="h-5 w-5" />
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Remote Ops</p>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-950">Admin Center</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-100">Admin Center</h1>
           </div>
         </div>
 
         <div className="hidden lg:block">
-          <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Core</p>
+          <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Core</p>
           <nav className="space-y-2">{primaryItems.map(renderItem)}</nav>
         </div>
 
         <div className="mt-6 hidden lg:block">
-          <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Tools</p>
+          <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Tools</p>
           <nav className="space-y-2">{secondaryItems.map(renderItem)}</nav>
         </div>
 
@@ -80,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium whitespace-nowrap transition ${isActive ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white/80 text-slate-600'}`}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium whitespace-nowrap transition ${isActive ? 'border-teal-400/60 bg-teal-500/15 text-teal-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
           })}
         </div>
 
-        <div className="mt-auto rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-slate-50">
+        <div className="mt-auto rounded-[1.75rem] border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-slate-50">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Server Status</p>
           <div className="mt-4 flex items-center justify-between">
             <div>
