@@ -2015,6 +2015,105 @@ app.get('/api/users', async (req, res) => {
 
 // Old file-based User Management Endpoints (kept for backwards compatibility)
 
+// WebSocket Server for live notifications
+const notificationsWss = new WebSocketServer({ server, path: '/ws/notifications' });
+
+notificationsWss.on('connection', (ws) => {
+  wsClients.push(ws);
+
+  // Send current notification state immediately after connect.
+  try {
+    ws.send(JSON.stringify({ type: 'notifications_init', data: notifications }));
+  } catch (err) {
+    console.error('Error sending notification init payload:', err);
+  }
+
+  ws.on('close', () => {
+    wsClients = wsClients.filter(client => client !== ws);
+  });
+
+  ws.on('error', (err) => {
+    console.error('Notifications WebSocket error:', err);
+    wsClients = wsClients.filter(client => client !== ws);
+  });
+});
+
+// WebSocket Server for interactive terminal sessions
+const terminalWss = new WebSocketServer({ server, path: '/ws/terminal' });
+
+terminalWss.on('connection', (ws) => {
+  let ptyProcess = null;
+
+  try {
+    ptyProcess = pty.spawn('/bin/bash', [], {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd: '/root',
+      env: process.env,
+    });
+  } catch (error) {
+    console.error('Failed to spawn PTY:', error);
+    try {
+      ws.send(JSON.stringify({ type: 'output', data: '\r\nTerminal backend failed to start.\r\n' }));
+    } catch (sendErr) {
+      console.error('Failed to send PTY error to client:', sendErr);
+    }
+    ws.close();
+    return;
+  }
+
+  ptyProcess.onData((data) => {
+    if (ws.readyState === 1) {
+      try {
+        ws.send(JSON.stringify({ type: 'output', data }));
+      } catch (err) {
+        console.error('Error sending terminal output:', err);
+      }
+    }
+  });
+
+  ws.on('message', (raw) => {
+    try {
+      const payload = JSON.parse(raw.toString());
+      if (!ptyProcess) return;
+
+      if (payload.type === 'input' && typeof payload.data === 'string') {
+        ptyProcess.write(payload.data);
+      }
+
+      if (
+        payload.type === 'resize' &&
+        Number.isInteger(payload.cols) &&
+        Number.isInteger(payload.rows) &&
+        payload.cols > 0 &&
+        payload.rows > 0
+      ) {
+        ptyProcess.resize(payload.cols, payload.rows);
+      }
+    } catch (err) {
+      console.error('Terminal WebSocket payload error:', err);
+    }
+  });
+
+  const cleanup = () => {
+    if (ptyProcess) {
+      try {
+        ptyProcess.kill();
+      } catch (err) {
+        console.error('Failed to terminate PTY process:', err);
+      }
+      ptyProcess = null;
+    }
+  };
+
+  ws.on('close', cleanup);
+  ws.on('error', (err) => {
+    console.error('Terminal WebSocket error:', err);
+    cleanup();
+  });
+});
+
 
 // WebSocket Server for OpenClaw AI Chat
 const openclawWss = new WebSocketServer({ server, path: '/ws/openclaw' });
